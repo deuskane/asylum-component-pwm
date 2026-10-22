@@ -123,6 +123,14 @@ targets:
       - PRESCALER_RATIO=00000010
 
   #---------------------------------------
+  lint_ghdl_synth_static_prescaler :
+  #---------------------------------------
+    << : *lint_ghdl_synth
+    description     : Synthesis check of sbi_PWM_synth_top, static prescaler (generics of sim_basic dut_static)
+    parameters      :
+      - STATIC_PRESCALER_RATIO=20
+
+  #---------------------------------------
   sim_basic:
   #---------------------------------------
     << : *default
@@ -158,6 +166,12 @@ parameters :
   #---------------------------------------
   # Generics of sbi_PWM_synth_top (lint_ghdl_synth_*)
   #---------------------------------------
+  STATIC_PRESCALER_RATIO :
+    description : Static prescaler, clock cycles per step of the prescaler (1 = no static prescaler)
+    datatype    : int
+    default     : 1
+    paramtype   : generic
+
   USER_DEFINE_PRESCALER :
     description : true, prescaler register writable by software ; false, ratio fixed to PRESCALER_RATIO
     datatype    : bool

@@ -24,8 +24,9 @@ package pwm_pkg is
 component sbi_PWM is
   generic(
     NAME                  : string  := "";
+    STATIC_PRESCALER_RATIO: positive := 1;                           -- Static prescaler : clock cycles per step of the prescaler (1 : no static prescaler)
     USER_DEFINE_PRESCALER : boolean := true;                         -- Prescaler register writable by software
-    PRESCALER_RATIO       : std_logic_vector(8-1 downto 0) := x"C2"  -- Default value for prescaler ratio (1 kHz with a 50 MHz clock and period = 0xFF)
+    PRESCALER_RATIO       : std_logic_vector(8-1 downto 0) := x"C2"  -- Default value for prescaler ratio (1 kHz with a 50 MHz clock, STATIC_PRESCALER_RATIO = 1 and period = 0xFF)
     );
   port   (
     clk_i            : in  std_logic;

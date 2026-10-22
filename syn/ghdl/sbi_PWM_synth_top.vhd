@@ -27,6 +27,7 @@ use     asylum.sbi_pkg.all;
 
 entity sbi_PWM_synth_top is
   generic (
+    STATIC_PRESCALER_RATIO: positive                       := 1;
     USER_DEFINE_PRESCALER : boolean                        := true;
     PRESCALER_RATIO       : std_logic_vector(8-1 downto 0) := x"C2"
   );
@@ -66,6 +67,7 @@ begin
 
   ins_sbi_PWM : entity asylum.sbi_PWM
     generic map (
+      STATIC_PRESCALER_RATIO=> STATIC_PRESCALER_RATIO,
       USER_DEFINE_PRESCALER => USER_DEFINE_PRESCALER,
       PRESCALER_RATIO       => PRESCALER_RATIO
     )

@@ -1,6 +1,7 @@
-default                         : Default Target
-lint_ghdl                       : Lint with GHDL (-Wall analysis and elaboration of sbi_PWM_synth_top)
-lint_ghdl_synth_default         : Synthesis check of sbi_PWM_synth_top, default generics (also the generics of sim_basic dut)
-lint_ghdl_synth_fixed_prescaler : Synthesis check of sbi_PWM_synth_top, fixed prescaler (generics of sim_basic dut_fixed)
-sim_basic                       : Simulation of sbi_PWM and pwm_core with the UVVM SBI BFM
+default                          : Default Target
+lint_ghdl                        : Lint with GHDL (-Wall analysis and elaboration of sbi_PWM_synth_top)
+lint_ghdl_synth_default          : Synthesis check of sbi_PWM_synth_top, default generics (also the generics of sim_basic dut)
+lint_ghdl_synth_fixed_prescaler  : Synthesis check of sbi_PWM_synth_top, fixed prescaler (generics of sim_basic dut_fixed)
+lint_ghdl_synth_static_prescaler : Synthesis check of sbi_PWM_synth_top, static prescaler (generics of sim_basic dut_static)
+sim_basic                        : Simulation of sbi_PWM and pwm_core with the UVVM SBI BFM
 

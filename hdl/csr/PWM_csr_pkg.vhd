@@ -37,7 +37,7 @@ package PWM_csr_pkg is
     we : std_logic;
   --==================================
   -- Field       : enable
-  -- Description : 0 : PWM is disabled (counter cleared, output low), 1 : PWM is enabled, the first period starts with the high phase
+  -- Description : 0 : PWM is disabled (counter cleared, output low), 1 : PWM is enabled, the first period starts with the high phase (up to STATIC_PRESCALER_RATIO CLK cycles after the write)
   -- Width       : 1
   --==================================
     enable : std_logic_vector(1-1 downto 0);
@@ -45,7 +45,7 @@ package PWM_csr_pkg is
 
   --==================================
   -- Register    : prescaler
-  -- Description : PWM Clock Prescaler. A tick of the PWM counter lasts (prescaler+1) CLK cycles. Taken into account at the start of the next PWM period
+  -- Description : PWM Clock Prescaler. A tick of the PWM counter lasts STATIC_PRESCALER_RATIO*(prescaler+1) CLK cycles (STATIC_PRESCALER_RATIO : generic of sbi_PWM, 1 by default). Taken into account at the start of the next PWM period
   -- Address     : 0x1
   -- Width       : 8
   -- Sw Access   : rw
@@ -59,7 +59,7 @@ package PWM_csr_pkg is
     we : std_logic;
   --==================================
   -- Field       : ratio
-  -- Description : Number of CLK cycles minus one of a tick
+  -- Description : Number of steps of the static prescaler minus one of a tick (CLK cycles minus one if STATIC_PRESCALER_RATIO = 1)
   -- Width       : 8
   --==================================
     ratio : std_logic_vector(8-1 downto 0);
@@ -67,7 +67,7 @@ package PWM_csr_pkg is
 
   --==================================
   -- Register    : period
-  -- Description : PWM Period. The PWM period is (period+1) ticks, i.e. (period+1)*(prescaler+1) CLK cycles. Taken into account at the start of the next PWM period
+  -- Description : PWM Period. The PWM period is (period+1) ticks, i.e. (period+1)*STATIC_PRESCALER_RATIO*(prescaler+1) CLK cycles. Taken into account at the start of the next PWM period
   -- Address     : 0x2
   -- Width       : 8
   -- Sw Access   : rw
