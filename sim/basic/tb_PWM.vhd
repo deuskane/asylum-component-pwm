@@ -16,6 +16,10 @@
 --                1 kHz with the reset values of the prescaler and period
 --              * dut_fixed : sbi_PWM, USER_DEFINE_PRESCALER = false
 --                prescaler register not implemented, fixed ratio
+--              * dut_static : sbi_PWM, STATIC_PRESCALER_RATIO = 20
+--                tick of 20*(prescaler+1) cycles, start on a pulse of the
+--                static prescaler, update at the next period, immediate
+--                disable, 50 Hz (servo : 20 ms period, 1.5 ms pulse)
 --              * dut_core  : pwm_core alone (no CSR, no SBI), 4-bit
 --                prescaler and 12-bit counter
 --              Plus : asynchronous reset while running.
@@ -49,6 +53,7 @@ architecture sim of tb_PWM is
   constant C_CLK_PERIOD       : time    := 20 ns;    -- 50 MHz
   constant C_PRESCALER_RST    : std_logic_vector(7 downto 0) := x"C2";
   constant C_PRESCALER_FIXED  : std_logic_vector(7 downto 0) := x"02";
+  constant C_STATIC_RATIO     : positive := 20;      -- STATIC_PRESCALER_RATIO of dut_static
 
   -- Register access patterns
   type     pattern_array_t is array (natural range <>) of std_logic_vector(7 downto 0);
@@ -80,6 +85,15 @@ architecture sim of tb_PWM is
                                          wdata(PWM_DATA_WIDTH-1 downto 0),
                                          rdata(PWM_DATA_WIDTH-1 downto 0));
   signal   pwm_fixed_o        : std_logic;
+
+  -- dut_static
+  signal   sbi_static_ini     : sbi_ini_t(addr (PWM_ADDR_WIDTH-1 downto 0),
+                                          wdata(PWM_DATA_WIDTH-1 downto 0));
+  signal   sbi_static_tgt     : sbi_tgt_t(rdata(PWM_DATA_WIDTH-1 downto 0));
+  signal   sbi_static_if      : t_sbi_if(addr (PWM_ADDR_WIDTH-1 downto 0),
+                                         wdata(PWM_DATA_WIDTH-1 downto 0),
+                                         rdata(PWM_DATA_WIDTH-1 downto 0));
+  signal   pwm_static_o       : std_logic;
 
   -- dut_core
   signal   core_enable        : std_logic := '0';
@@ -141,6 +155,32 @@ begin
   sbi_fixed_ini.wdata                           <= sbi_fixed_if.wdata(PWM_DATA_WIDTH-1 downto 0);
   sbi_fixed_if.ready                            <= sbi_fixed_tgt.ready;
   sbi_fixed_if.rdata(PWM_DATA_WIDTH-1 downto 0) <= sbi_fixed_tgt.rdata;
+
+  -----------------------------------------------------------------------------
+  -- dut_static : sbi_PWM, static prescaler of C_STATIC_RATIO clock cycles
+  -----------------------------------------------------------------------------
+  dut_static : sbi_PWM
+    generic map (
+      NAME                   => "PWM_STATIC"
+     ,STATIC_PRESCALER_RATIO => C_STATIC_RATIO
+     ,USER_DEFINE_PRESCALER  => true
+     ,PRESCALER_RATIO        => C_PRESCALER_RST
+    )
+    port map (
+      clk_i      => clk_i
+     ,arst_b_i   => arst_b_i
+     ,sbi_ini_i  => sbi_static_ini
+     ,sbi_tgt_o  => sbi_static_tgt
+     ,pwm_o      => pwm_static_o
+    );
+
+  sbi_static_ini.cs                              <= sbi_static_if.cs;
+  sbi_static_ini.addr                            <= std_logic_vector(sbi_static_if.addr(PWM_ADDR_WIDTH-1 downto 0));
+  sbi_static_ini.re                              <= sbi_static_if.rena;
+  sbi_static_ini.we                              <= sbi_static_if.wena;
+  sbi_static_ini.wdata                           <= sbi_static_if.wdata(PWM_DATA_WIDTH-1 downto 0);
+  sbi_static_if.ready                            <= sbi_static_tgt.ready;
+  sbi_static_if.rdata(PWM_DATA_WIDTH-1 downto 0) <= sbi_static_tgt.rdata;
 
   -----------------------------------------------------------------------------
   -- dut_core : pwm_core alone, configuration driven by the sequencer
@@ -236,6 +276,35 @@ begin
       wait_edge(pwm_o, '1', C_CLK_PERIOD, msg & " : first period starts one clock cycle after the enable");
     end procedure;
 
+    -- Register access of dut_static
+    procedure write_static(addr : unsigned; data : std_logic_vector; msg : string) is
+    begin
+      sbi_write(addr, data, msg, clk_i, sbi_static_if, C_SCOPE, shared_msg_id_panel, v_sbi_config);
+    end procedure;
+
+    procedure check_static(addr : unsigned; data : std_logic_vector; msg : string) is
+    begin
+      sbi_check(addr, data, msg, clk_i, sbi_static_if, ERROR, C_SCOPE, shared_msg_id_panel, v_sbi_config);
+    end procedure;
+
+    -- Configuration of dut_static, PWM disabled : prescaler ratio, period and duty
+    procedure configure_static(ratio : natural; period : natural; duty : natural; msg : string) is
+    begin
+      write_static(PWM_CFG      , x"00", msg & " : disable PWM");
+      write_static(PWM_PRESCALER, std_logic_vector(to_unsigned(ratio , 8)), msg & " : prescaler " & to_string(ratio));
+      write_static(PWM_PERIOD   , std_logic_vector(to_unsigned(period, 8)), msg & " : period "    & to_string(period));
+      write_static(PWM_DUTY     , std_logic_vector(to_unsigned(duty  , 8)), msg & " : duty "      & to_string(duty));
+    end procedure;
+
+    -- Enable dut_static : the first period starts on the first pulse of the
+    -- static prescaler after the enable, less than C_STATIC_RATIO clock
+    -- cycles after the end of the write
+    procedure enable_static(msg : string) is
+    begin
+      write_static(PWM_CFG, x"01", msg & " : enable PWM");
+      wait_edge(pwm_static_o, '1', C_STATIC_RATIO*C_CLK_PERIOD, msg & " : first period starts on the next pulse of the static prescaler");
+    end procedure;
+
     -- Drive the configuration of dut_core after a rising edge of clk_i
     procedure core_configure(enable : std_logic; ratio : natural; period : natural; duty : natural) is
     begin
@@ -249,6 +318,7 @@ begin
   begin
     sbi_if       <= init_sbi_if_signals(PWM_ADDR_WIDTH, PWM_DATA_WIDTH);
     sbi_fixed_if <= init_sbi_if_signals(PWM_ADDR_WIDTH, PWM_DATA_WIDTH);
+    sbi_static_if<= init_sbi_if_signals(PWM_ADDR_WIDTH, PWM_DATA_WIDTH);
     arst_b_i     <= '0';
     wait for 100 ns;
     arst_b_i     <= '1';
@@ -270,6 +340,9 @@ begin
     check_value(pwm_o      , '0', ERROR, "dut : PWM disabled, output low"      , C_SCOPE);
     check_value(pwm_fixed_o, '0', ERROR, "dut_fixed : PWM disabled, output low", C_SCOPE);
     check_value(pwm_core_o , '0', ERROR, "dut_core : PWM disabled, output low" , C_SCOPE);
+    check_static(PWM_CFG      , x"00"          , "dut_static : reset value cfg");
+    check_static(PWM_PRESCALER, C_PRESCALER_RST, "dut_static : reset value prescaler (PRESCALER_RATIO)");
+    check_value(pwm_static_o, '0', ERROR, "dut_static : PWM disabled, output low", C_SCOPE);
 
     ------------------------------------------------
     log(ID_LOG_HDR, "2. Register access", C_SCOPE);
@@ -457,9 +530,42 @@ begin
     core_configure('0', 0, 4094, 4095);
 
     ------------------------------------------------
-    log(ID_LOG_HDR, "13. Asynchronous reset while running", C_SCOPE);
+    log(ID_LOG_HDR, "13. dut_static : static prescaler of 20 clock cycles", C_SCOPE);
     ------------------------------------------------
-    -- duty > period : the 3 outputs are high before the reset
+    -- Tick of 20*2 = 40 cycles, period 4 ticks, duty 2 ticks
+    configure_static(1, 3, 2, "Static");
+    check_constant(pwm_static_o, '0', 2*C_STATIC_RATIO, "Static : disabled");
+    enable_static("Static");
+    check_periods(pwm_static_o, 2*40, 4*40, 3, "Static : tick of 20*(prescaler+1) cycles");
+
+    -- Duty decreased during the high phase : taken into account at the next period
+    v_t0 := now;
+    write_static(PWM_DUTY, x"01", "Static : duty 1 during the high phase");
+    wait_edge(pwm_static_o, '0', 4*40*C_CLK_PERIOD, "Static duty 1 : falling edge");
+    check_value((now - v_t0) / C_CLK_PERIOD, 2*40, ERROR, "Static duty 1 : current high phase unchanged", C_SCOPE);
+    wait_edge(pwm_static_o, '1', 4*40*C_CLK_PERIOD, "Static duty 1 : rising edge");
+    check_value((now - v_t0) / C_CLK_PERIOD, 4*40, ERROR, "Static duty 1 : current period unchanged", C_SCOPE);
+    check_periods(pwm_static_o, 1*40, 4*40, 1, "Static duty 1 : next period");
+
+    -- Disable : immediate, not delayed by the static prescaler
+    write_static(PWM_CFG, x"00", "Static : disable during the high phase");
+    wait_edge(pwm_static_o, '0', C_CLK_PERIOD, "Static : output low one clock cycle after the disable");
+    check_constant(pwm_static_o, '0', 4*40, "Static : output stays low");
+
+    -- 50 Hz with a 50 MHz clock : 20*(249+1)*(199+1) = 1000000 clock cycles,
+    -- duty 15 ticks of 5000 clock cycles (100 us) : 1.5 ms pulse (servo center)
+    configure_static(249, 199, 15, "50 Hz");
+    enable_static("50 Hz");
+    check_periods(pwm_static_o, 15*5000, 200*5000, 2, "50 Hz : servo, 1.5 ms pulse every 20 ms");
+    log(ID_SEQUENCER, "50 Hz : PWM period " & to_string(200*5000*C_CLK_PERIOD, ms) & ", high phase " & to_string(15*5000*C_CLK_PERIOD, us), C_SCOPE);
+    write_static(PWM_CFG, x"00", "50 Hz : disable PWM");
+
+    ------------------------------------------------
+    log(ID_LOG_HDR, "14. Asynchronous reset while running", C_SCOPE);
+    ------------------------------------------------
+    -- duty > period : the 4 outputs are high before the reset
+    configure_static(0, 9, 10, "Reset");
+    enable_static("Reset");
     configure(0, 9, 10, "Reset");
     enable_pwm("Reset");
     core_configure('1', 0, 9, 10);
@@ -469,11 +575,13 @@ begin
     check_value(pwm_o      , '1', ERROR, "Reset : dut output high before the reset"      , C_SCOPE);
     check_value(pwm_fixed_o, '1', ERROR, "Reset : dut_fixed output high before the reset", C_SCOPE);
     check_value(pwm_core_o , '1', ERROR, "Reset : dut_core output high before the reset" , C_SCOPE);
+    check_value(pwm_static_o,'1', ERROR, "Reset : dut_static output high before the reset", C_SCOPE);
     arst_b_i     <= '0';
     wait for 1 ns;
     check_value(pwm_o      , '0', ERROR, "Reset : dut output low"      , C_SCOPE);
     check_value(pwm_fixed_o, '0', ERROR, "Reset : dut_fixed output low", C_SCOPE);
     check_value(pwm_core_o , '0', ERROR, "Reset : dut_core output low" , C_SCOPE);
+    check_value(pwm_static_o,'0', ERROR, "Reset : dut_static output low", C_SCOPE);
     wait for 5*C_CLK_PERIOD;
     core_enable  <= '0';
     arst_b_i     <= '1';
@@ -483,10 +591,12 @@ begin
     check_reg  (PWM_PERIOD   , x"FF"          , "Reset : period back to its reset value");
     check_reg  (PWM_DUTY     , x"00"          , "Reset : duty back to its reset value");
     check_fixed(PWM_CFG      , x"00"          , "Reset : dut_fixed cfg back to its reset value");
+    check_static(PWM_CFG     , x"00"          , "Reset : dut_static cfg back to its reset value");
     wait for 50*C_CLK_PERIOD;
     check_stable(pwm_o      , 50*C_CLK_PERIOD, ERROR, "Reset : dut output stays low"      , C_SCOPE);
     check_stable(pwm_fixed_o, 50*C_CLK_PERIOD, ERROR, "Reset : dut_fixed output stays low", C_SCOPE);
     check_stable(pwm_core_o , 50*C_CLK_PERIOD, ERROR, "Reset : dut_core output stays low" , C_SCOPE);
+    check_stable(pwm_static_o,50*C_CLK_PERIOD, ERROR, "Reset : dut_static output stays low", C_SCOPE);
 
     log(ID_LOG_HDR, "Simulation Finished", C_SCOPE);
     report_alert_counters(FINAL);
