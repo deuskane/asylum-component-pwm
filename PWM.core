@@ -59,6 +59,16 @@ filesets:
     depend       :
       - bitvis:verification:uvvm
 
+  #---------------------------------------
+  # Lint Files (pre_run hook of lint_ghdl_synth_*)
+  #---------------------------------------
+  files_lint:
+    files:
+      - syn/ghdl/sbi_PWM_synth_top.vhd
+      - syn/ghdl/ghdl_synth.sh : {file_type : user, copyto : ghdl_synth.sh}
+      - syn/ghdl/ghdl_synth.mk : {file_type : user, copyto : ghdl_synth.mk}
+    file_type : vhdlSource-2008
+
 #=========================================
 targets:
 #=========================================
@@ -73,6 +83,43 @@ targets:
     default_tool    : ghdl
     generate        :
       - gen_csr
+
+  #---------------------------------------
+  # Lint : -Wall analysis and elaboration (empty simulation)
+  #---------------------------------------
+  lint_ghdl : &lint_ghdl
+    << : *default
+    description     : Lint with GHDL (-Wall analysis and elaboration of sbi_PWM_synth_top)
+    toplevel        : sbi_PWM_synth_top
+    filesets_append : [files_lint]
+    default_tool    : ghdl
+    tools :
+      ghdl :
+        analyze_options : ["-Wall"]
+
+  #---------------------------------------
+  # Synthesis check : -Wall analysis, ghdl --synth -Wall and elaboration
+  # (no simulation) of sbi_PWM_synth_top with the generics of the target.
+  # The pre_run hook adds syn/ghdl/ghdl_synth.mk to the edalize Makefile.
+  # FuseSoC merges tools in depth : analyze_options comes from lint_ghdl.
+  #---------------------------------------
+  lint_ghdl_synth_default : &lint_ghdl_synth
+    << : *lint_ghdl
+    description     : Synthesis check of sbi_PWM_synth_top, default generics (also the generics of sim_basic dut)
+    tools :
+      ghdl :
+        run_options     : ["--no-run"]
+    hooks :
+      pre_run : [ghdl_synth]
+
+  #---------------------------------------
+  lint_ghdl_synth_fixed_prescaler :
+  #---------------------------------------
+    << : *lint_ghdl_synth
+    description     : Synthesis check of sbi_PWM_synth_top, fixed prescaler (generics of sim_basic dut_fixed)
+    parameters      :
+      - USER_DEFINE_PRESCALER=false
+      - PRESCALER_RATIO=00000010
 
   #---------------------------------------
   sim_basic:
@@ -92,3 +139,32 @@ targets:
         run_options     :
           - "$(GHDL_RUN_OPTION)"
           - "--ieee-asserts=disable"
+
+#=========================================
+scripts:
+#=========================================
+
+  #---------------------------------------
+  # pre_run hook of lint_ghdl_synth_* (cwd = work_root)
+  #---------------------------------------
+  ghdl_synth :
+    cmd : [bash, ghdl_synth.sh]
+
+#=========================================
+parameters :
+#=========================================
+
+  #---------------------------------------
+  # Generics of sbi_PWM_synth_top (lint_ghdl_synth_*)
+  #---------------------------------------
+  USER_DEFINE_PRESCALER :
+    description : true, prescaler register writable by software ; false, ratio fixed to PRESCALER_RATIO
+    datatype    : bool
+    default     : true
+    paramtype   : generic
+
+  PRESCALER_RATIO :
+    description : Reset / fixed value of the prescaler ratio (8-bit string)
+    datatype    : str
+    default     : "11000010"
+    paramtype   : generic
