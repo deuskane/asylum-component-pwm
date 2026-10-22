@@ -13,7 +13,10 @@
 -- Description:
 -- PWM core, independent of the CSR and of the bus interface : the
 -- configuration is made of plain signals.
--- * Prescaler   : one tick every (ratio+1) clock cycles
+-- * Static prescaler : clock_divider in pulse mode, one enable pulse every
+--                 STATIC_PRESCALER_RATIO clock cycles (none if 1)
+-- * Prescaler   : one tick every (ratio+1) enable pulses, so every
+--                 STATIC_PRESCALER_RATIO*(ratio+1) clock cycles
 -- * PWM counter : counts the ticks from 0 to period, then restarts at 0.
 --                 A PWM period is (period+1) ticks.
 -- * Output      : high while the counter is lower than duty, so high during
@@ -23,9 +26,10 @@
 -- the start of each PWM period, and continuously while the PWM is disabled :
 -- a new value is taken into account at the start of the next PWM period,
 -- without glitch on pwm_o.
--- While cfg_enable_i = 0, the counter is cleared and pwm_o is low. The first
--- PWM period starts (with the high phase) one clock cycle after
--- cfg_enable_i is set.
+-- While cfg_enable_i = 0, the counter is cleared and pwm_o is low (one
+-- clock cycle after cfg_enable_i is cleared). The first PWM period starts
+-- (with the high phase) on the first enable pulse after cfg_enable_i is set :
+-- one clock cycle after, up to STATIC_PRESCALER_RATIO clock cycles after.
 -- pwm_o is the output of a register (no glitch).
 -------------------------------------------------------------------------------
 -- Copyright (c) 2026
@@ -38,9 +42,12 @@
 library IEEE;
 use     IEEE.STD_LOGIC_1164.ALL;
 use     IEEE.numeric_std.ALL;
+library asylum;
+use     asylum.clock_divider_pkg.all;
 
 entity pwm_core is
   generic (
+    STATIC_PRESCALER_RATIO : positive := 1;                   -- Static prescaler : clock cycles per enable pulse of the prescaler (1 : no static prescaler)
     PRESCALER_WIDTH      : natural := 8;                      -- Width of the prescaler ratio
     COUNTER_WIDTH        : natural := 8                       -- Width of the period and of the duty (resolution of the PWM)
     );
@@ -62,6 +69,9 @@ end entity pwm_core;
 
 architecture rtl of pwm_core is
 
+  -- Static prescaler
+  signal   cke                    : std_logic;
+
   -- Shadow registers of the configuration
   signal   load                   : std_logic;
   signal   ratio_r                : unsigned(PRESCALER_WIDTH-1 downto 0);
@@ -81,6 +91,33 @@ architecture rtl of pwm_core is
   signal   pwm_r                  : std_logic;
 
 begin  -- architecture rtl
+
+  -----------------------------------------------------------------------------
+  -- Static prescaler
+  -----------------------------------------------------------------------------
+  -- clock_divider in pulse mode : cke is 1 during one clock cycle every
+  -- STATIC_PRESCALER_RATIO clock cycles. The prescaler, the PWM counter and
+  -- the output only progress when cke = 1.
+  -- clock_divider outputs clk_i itself when its ratio is 1 : not used then.
+  gen_static_prescaler: if STATIC_PRESCALER_RATIO > 1
+  generate
+    ins_clock_divider : clock_divider
+      generic map
+      (RATIO     => STATIC_PRESCALER_RATIO
+      ,ALGO      => "pulse"
+      )
+      port map
+      (clk_i     => clk_i
+      ,cke_i     => '1'
+      ,arstn_i   => arst_b_i
+      ,clk_div_o => cke
+      );
+  end generate gen_static_prescaler;
+
+  gen_static_prescaler_b: if STATIC_PRESCALER_RATIO = 1
+  generate
+    cke                <= '1';
+  end generate gen_static_prescaler_b;
 
   -----------------------------------------------------------------------------
   -- Shadow registers of the configuration
@@ -113,10 +150,11 @@ begin  -- architecture rtl
   -----------------------------------------------------------------------------
   -- Prescaler
   -----------------------------------------------------------------------------
-  -- Down counter : a tick when it reaches 0, then it is reloaded with the
-  -- ratio, so one tick every (ratio+1) clock cycles. Held at the ratio while
-  -- the PWM is disabled : the first tick lasts (ratio+1) clock cycles too.
-  tick                 <= '1' when prescaler_cnt_r = 0 else
+  -- Down counter of the enable pulses : a tick when it reaches 0, then it is
+  -- reloaded with the ratio, so one tick every (ratio+1) enable pulses. Held
+  -- at the ratio while the PWM is disabled : the first tick lasts (ratio+1)
+  -- enable pulses too.
+  tick                 <= '1' when cke = '1' and prescaler_cnt_r = 0 else
                           '0';
 
   process(clk_i,arst_b_i)
@@ -129,7 +167,8 @@ begin  -- architecture rtl
       if cfg_enable_i = '0' or tick = '1'
       then
         prescaler_cnt_r <= ratio_next;
-      else
+      elsif cke = '1'
+      then
         prescaler_cnt_r <= prescaler_cnt_r - 1;
       end if;
     end if;
@@ -168,8 +207,9 @@ begin  -- architecture rtl
   -----------------------------------------------------------------------------
   -- Output
   -----------------------------------------------------------------------------
-  -- Registered comparison : pwm_o follows the counter with one clock cycle of
-  -- latency, the same for every edge, so the durations are not changed.
+  -- Registered comparison, updated on the enable pulses : pwm_o follows the
+  -- counter with the same latency for every edge, so the durations are not
+  -- changed. Cleared as soon as the PWM is disabled.
   process(clk_i,arst_b_i)
   begin
     if arst_b_i = '0'
@@ -177,11 +217,17 @@ begin  -- architecture rtl
       pwm_r <= '0';
     elsif rising_edge(clk_i)
     then
-      if cfg_enable_i = '1' and pwm_cnt_r < duty_r
+      if cfg_enable_i = '0'
       then
-        pwm_r <= '1';
-      else
         pwm_r <= '0';
+      elsif cke = '1'
+      then
+        if pwm_cnt_r < duty_r
+        then
+          pwm_r <= '1';
+        else
+          pwm_r <= '0';
+        end if;
       end if;
     end if;
   end process;

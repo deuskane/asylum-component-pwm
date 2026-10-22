@@ -43,6 +43,7 @@ end component sbi_PWM;
 
 component pwm_core is
   generic (
+    STATIC_PRESCALER_RATIO : positive := 1;                   -- Static prescaler : clock cycles per enable pulse of the prescaler (1 : no static prescaler)
     PRESCALER_WIDTH      : natural := 8;                      -- Width of the prescaler ratio
     COUNTER_WIDTH        : natural := 8                       -- Width of the period and of the duty (resolution of the PWM)
     );
