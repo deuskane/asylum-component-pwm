@@ -50,6 +50,15 @@ filesets:
       - asylum:utils:generators
       - asylum:utils:pkg
 
+  #---------------------------------------
+  sim_basic:
+  #---------------------------------------
+    files        :
+      - sim/basic/tb_PWM.vhd
+    file_type    : vhdlSource-2008
+    depend       :
+      - bitvis:verification:uvvm
+
 #=========================================
 targets:
 #=========================================
@@ -64,3 +73,22 @@ targets:
     default_tool    : ghdl
     generate        :
       - gen_csr
+
+  #---------------------------------------
+  sim_basic:
+  #---------------------------------------
+    << : *default
+    description     : Simulation of sbi_PWM and pwm_core with the UVVM SBI BFM
+    filesets_append :
+      - sim_basic
+    toplevel        : tb_PWM
+    default_tool    : ghdl
+    tools :
+      ghdl :
+        analyze_options :
+          - "$(GHDL_ANALYZE_OPTION)"
+          - "-Wall"
+          - "-frelaxed"
+        run_options     :
+          - "$(GHDL_RUN_OPTION)"
+          - "--ieee-asserts=disable"
