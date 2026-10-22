@@ -190,20 +190,50 @@ Notes:
 
 ### Testbenches
 
+One scenario per simulation: the testbenches have a `TEST` generic, and each `sim_*` target sets `TEST` and the generics of the DUT configuration (FuseSoC `parameters`). The checks are self-checking UVVM checks; the high phase and the period of `pwm_o` are measured in clock cycles and checked exactly, constant levels with `check_stable`.
+
 | File | DUT | Description |
 |------|-----|-------------|
-| [sim/basic/tb_PWM.vhd](sim/basic/tb_PWM.vhd) | `sbi_PWM` x 3, `pwm_core` | UVVM testbench, self-checking (257 checks). The CSR are accessed with the SBI BFM (`bitvis_vip_sbi`); the high phase and the period of each PWM output are measured in clock cycles and checked exactly, constant levels with `check_stable`. `dut` (`sbi_PWM`, default generics): (1) reset values of the 4 registers and of the outputs; (2) read / write of `prescaler`, `period`, `duty` with 4 patterns, only `cfg.enable` implemented; (3) output low while disabled; (4) start latency (rising edge within one clock cycle after the write of `cfg`) and first period complete; (5) prescaler; (6) duty 0, 1, `period`, `period + 1` and 255; (7) period 0; (8) configuration taken into account at the next PWM period: duty decreased during the high phase (no truncated pulse), duty increased during the low phase (no second pulse), period increased (current period not extended), duty and period decreased below the counter (no counter overflow), prescaler decreased (current ticks unchanged); (9) disable during the high phase (output low one cycle later) and enable again; (10) 1001.6 Hz with the reset values of `prescaler` and `period`. `dut_fixed` (`USER_DEFINE_PRESCALER = false`, `PRESCALER_RATIO = x"02"`): `prescaler` not writable, read 0, PWM timing with the fixed ratio. `dut_static` (`STATIC_PRESCALER_RATIO = 20`): tick of `20 x (prescaler + 1)` cycles, first period started on a pulse of the static prescaler, duty taken into account at the next period, disable not delayed by the static prescaler, 50 Hz servo signal (1.5 ms pulse every 20 ms). `dut_core` (`pwm_core` alone, 4-bit prescaler, 12-bit counter): maximum prescaler ratio, full 12-bit period, duty 4095 written while running, duty greater than period. Plus: asynchronous reset while the 4 outputs are high |
+| [sim/basic/tb_PWM.vhd](sim/basic/tb_PWM.vhd) | `sbi_PWM` | Generics `TEST`, `STATIC_PRESCALER_RATIO`, `USER_DEFINE_PRESCALER`, `PRESCALER_RATIO` (those of the DUT). The CSR are accessed with the SBI BFM (`bitvis_vip_sbi`). The expected durations are computed from the generics: a tick lasts `STATIC_PRESCALER_RATIO x (ratio + 1)` clock cycles, the ratio being `PRESCALER_RATIO` when `USER_DEFINE_PRESCALER = false`, and the first period starts less than `STATIC_PRESCALER_RATIO` clock cycles after the end of the write of `cfg.enable` |
+| [sim/core/tb_pwm_core.vhd](sim/core/tb_pwm_core.vhd) | `pwm_core` | Generics `TEST`, `PRESCALER_WIDTH`, `COUNTER_WIDTH`. The configuration ports are driven directly (no CSR, no SBI); the values of the scenarios are derived from the widths (maximum ratio, maximum period) |
+| [sim/common/tb_pwm_pkg.vhd](sim/common/tb_pwm_pkg.vhd) | | Shared clock period and checks: `wait_edge`, `check_periods` (high phase and period of N PWM periods), `check_constant` |
 
 ### Targets
 
 | Target | Toplevel | Description |
 |--------|----------|-------------|
 | `default` | `sbi_PWM` | HDL fileset + CSR generation (not a simulation) |
-| `sim_basic` | `tb_PWM` | `sbi_PWM` (3 configurations) and `pwm_core` with the UVVM SBI BFM |
+| `sim_reset_values` | `tb_PWM` | Reset values of the 4 registers, output low |
+| `sim_registers` | `tb_PWM` | Read / write of `prescaler`, `period`, `duty` with 4 patterns, only `cfg.enable` implemented |
+| `sim_disabled` | `tb_PWM` | Output low while the PWM is disabled |
+| `sim_no_prescaler` | `tb_PWM` | Start latency (first rising edge within one clock cycle after the write of `cfg`), first period complete, timing with prescaler 0 |
+| `sim_prescaler` | `tb_PWM` | Same with prescaler 4 |
+| `sim_duty` | `tb_PWM` | Duty 0 (always low), 1, `period` (low during one tick), `period + 1` and 255 (always high) |
+| `sim_period_0` | `tb_PWM` | PWM period of one tick |
+| `sim_update_duty` | `tb_PWM` | Duty decreased during the high phase (no truncated pulse), increased during the low phase (no second pulse): taken into account at the next period |
+| `sim_update_period` | `tb_PWM` | Period increased (current period not extended), duty and period decreased below the counter (no counter overflow) |
+| `sim_update_prescaler` | `tb_PWM` | Prescaler decreased during a period: the current period keeps its ticks |
+| `sim_disable_enable` | `tb_PWM` | Disable during the high phase (output low one cycle later), enable again (new period from the start), disable during the low phase (counter cleared), enable again |
+| `sim_frequency_1khz` | `tb_PWM` | Reset values of `prescaler` and `period`: 1001.6 Hz |
+| `sim_reset` | `tb_PWM` | Asynchronous reset while the output is high, registers back to their reset values |
+| `sim_fixed_prescaler_reset_values` | `tb_PWM` | `USER_DEFINE_PRESCALER = false`, `PRESCALER_RATIO = x"02"`: reset values, `prescaler` read 0 |
+| `sim_fixed_prescaler_registers` | `tb_PWM` | Same configuration: `prescaler` not writable |
+| `sim_fixed_prescaler` | `tb_PWM` | Same configuration: timing with the fixed ratio |
+| `sim_static_prescaler` | `tb_PWM` | `STATIC_PRESCALER_RATIO = 20`: tick of `20 x (prescaler + 1)` cycles, first period started on a pulse of the static prescaler |
+| `sim_static_prescaler_update_duty` | `tb_PWM` | Same configuration: duty taken into account at the next period |
+| `sim_static_prescaler_disable_enable` | `tb_PWM` | Same configuration: disable not delayed by the static prescaler, enable on its next pulse |
+| `sim_static_prescaler_reset` | `tb_PWM` | Same configuration: asynchronous reset while running |
+| `sim_static_prescaler_servo_50hz` | `tb_PWM` | Same configuration: servo signal, 1.5 ms pulse every 20 ms (prescaler 249, period 199, duty 15) |
+| `sim_core_prescaler` | `tb_pwm_core` | `pwm_core` 4-bit prescaler, 12-bit counter: maximum prescaler ratio, period 1000 ticks |
+| `sim_core_full_period` | `tb_pwm_core` | Same: maximum period (4096 ticks), duty half |
+| `sim_core_update_duty` | `tb_pwm_core` | Same: maximum duty written at the start of a period, taken into account at the next one |
+| `sim_core_always_high` | `tb_pwm_core` | Same: duty greater than period |
 | `lint_ghdl` | `sbi_PWM_synth_top` | Lint: GHDL `-Wall` analysis and elaboration (empty simulation) of `sbi_PWM` in a wrapper with flat SBI ports (`syn/ghdl/sbi_PWM_synth_top.vhd`) |
-| `lint_ghdl_synth_default` | `sbi_PWM_synth_top` | Synthesis check (see below), default generics of `sbi_PWM` (generics of `dut` in `sim_basic`) |
-| `lint_ghdl_synth_fixed_prescaler` | `sbi_PWM_synth_top` | Synthesis check, `USER_DEFINE_PRESCALER = false`, `PRESCALER_RATIO = x"02"` (generics of `dut_fixed` in `sim_basic`) |
-| `lint_ghdl_synth_static_prescaler` | `sbi_PWM_synth_top` | Synthesis check, `STATIC_PRESCALER_RATIO = 20` (generics of `dut_static` in `sim_basic`) |
+| `lint_ghdl_synth_default` | `sbi_PWM_synth_top` | Synthesis check (see below), default generics of `sbi_PWM` (configuration of the `sim_*` targets of `tb_PWM` without prefix) |
+| `lint_ghdl_synth_fixed_prescaler` | `sbi_PWM_synth_top` | Synthesis check, `USER_DEFINE_PRESCALER = false`, `PRESCALER_RATIO = x"02"` (configuration of the `sim_fixed_prescaler*` targets) |
+| `lint_ghdl_synth_static_prescaler` | `sbi_PWM_synth_top` | Synthesis check, `STATIC_PRESCALER_RATIO = 20` (configuration of the `sim_static_prescaler*` targets) |
+
+To add a scenario, add a procedure `test_<name>` in the testbench, its branch in the `TEST` selection, and a `sim_*` target with `TEST=<name>` and the generics of its configuration.
 
 A `lint_ghdl_synth_*` target is `lint_ghdl` with the generics of its configuration (FuseSoC `parameters`) and a `pre_run` hook, `syn/ghdl/ghdl_synth.sh`, which adds `include ghdl_synth.mk` to the Makefile generated by edalize. The run step (`make run EXTRA_OPTIONS=<generics>`) then runs, in the build directory:
 
@@ -214,11 +244,11 @@ To add a configuration, add a target with its `parameters` (the generics are dec
 
 ### How to Run
 
-The default tool is GHDL (`mk/defs.mk`: `TOOL ?= ghdl`, `TARGET ?= sim_basic`).
+The default tool is GHDL (`mk/defs.mk`: `TOOL ?= ghdl`, `TARGET ?= sim_prescaler`).
 
 ```bash
 make help                 # variables, rules and target list (mk/targets.txt)
-make sim_basic            # run one target (log in log/)
+make sim_prescaler        # run one target (log in log/)
 make nonreg_sim           # run every sim_* target
 make lint_ghdl            # GHDL -Wall lint (make nonreg_lint: every lint_* target)
 make lint_ghdl_synth_default   # GHDL -Wall lint + ghdl --synth -Wall check of one configuration
@@ -228,10 +258,10 @@ make clean                # remove build/
 Equivalent FuseSoC command:
 
 ```bash
-fusesoc --cores-root . run --build-root build --target sim_basic asylum:component:PWM:1.0.0
+fusesoc --cores-root . run --build-root build --target sim_prescaler asylum:component:PWM:1.0.0
 ```
 
-Outside CI, GHDL writes a waveform `dut.fst`. CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs `sim_basic`.
+Outside CI, GHDL writes a waveform `dut.fst`. CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs every `sim_*` target, one job per target.
 
 ## Synthesis
 
@@ -313,7 +343,9 @@ asylum-component-pwm/
 │       ├── PWM_csr.md      # Generated
 │       └── PWM_csr.h       # Generated
 ├── sim/
-│   └── basic/              # tb_PWM.vhd (UVVM, SBI BFM)
+│   ├── common/             # tb_pwm_pkg.vhd (checks shared by the testbenches)
+│   ├── basic/              # tb_PWM.vhd (sbi_PWM, UVVM SBI BFM)
+│   └── core/               # tb_pwm_core.vhd (pwm_core alone)
 └── syn/ghdl/
     ├── sbi_PWM_synth_top.vhd  # Lint / synthesis check top (sbi_PWM, flat SBI ports)
     ├── ghdl_synth.sh       # pre_run hook of lint_ghdl_synth_*: includes ghdl_synth.mk in the edalize Makefile
@@ -327,4 +359,4 @@ asylum-component-pwm/
 | `asylum:component:clock_divider` (>= 2.1.0) | `hdl` | Static prescaler (`clock_divider`, pulse mode, `BYPASS_CBUFG = true`) of `pwm_core` |
 | `asylum:utils:generators` | `hdl` | regtool generator and CSR building block (`csr_reg`) |
 | `asylum:utils:pkg` | `hdl` | Common packages (`sbi_pkg`, ...) |
-| `bitvis:verification:uvvm` | `sim_basic` | UVVM utility library and SBI VIP (testbench only) |
+| `bitvis:verification:uvvm` | `sim_common`, `sim_basic`, `sim_core` | UVVM utility library and SBI VIP (testbenches only) |
