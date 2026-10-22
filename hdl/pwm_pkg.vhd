@@ -15,10 +15,32 @@
 library IEEE;
 use     IEEE.STD_LOGIC_1164.ALL;
 use     IEEE.NUMERIC_STD.ALL;
+library asylum;
+use     asylum.sbi_pkg.all;
 
 package pwm_pkg is
 
 -- [COMPONENT_INSERT][BEGIN]
+component sbi_PWM is
+  generic(
+    NAME                  : string  := "";
+    USER_DEFINE_PRESCALER : boolean := true;                         -- Prescaler register writable by software
+    PRESCALER_RATIO       : std_logic_vector(8-1 downto 0) := x"C2"  -- Default value for prescaler ratio (1 kHz with a 50 MHz clock and period = 0xFF)
+    );
+  port   (
+    clk_i            : in  std_logic;
+    arst_b_i         : in  std_logic; -- asynchronous reset
+
+    -- Bus
+    sbi_ini_i        : in  sbi_ini_t;
+    sbi_tgt_o        : out sbi_tgt_t;
+
+    -- PWM Output
+    pwm_o            : out std_logic
+    );
+
+end component sbi_PWM;
+
 component pwm_core is
   generic (
     PRESCALER_WIDTH      : natural := 8;                      -- Width of the prescaler ratio

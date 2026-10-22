@@ -1,0 +1,66 @@
+CAPI=2:
+
+#-----------------------------------------------------------------------------
+# Title      : PWM Core file
+# Project    : Asylum
+#-----------------------------------------------------------------------------
+# File       : PWM.core
+# Author     : mrosiere
+#-----------------------------------------------------------------------------
+# Description: PWM with CSR access over the SBI bus
+#-----------------------------------------------------------------------------
+# Copyright (c) 2026
+#-----------------------------------------------------------------------------
+# Revisions  :
+# Date        Version  Author   Description
+# 2026-10-22  1.0.0    mrosiere First Release
+#-----------------------------------------------------------------------------
+
+name        : asylum:component:PWM:1.0.0
+description : PWM Module
+
+#=========================================
+generate:
+#=========================================
+
+  #---------------------------------------
+  gen_csr:
+  #---------------------------------------
+    generator : regtool
+    parameters:
+      file         : hdl/csr/PWM.hjson
+      name         : PWM
+      copy         : hdl/csr
+      logical_name : asylum
+
+#=========================================
+filesets:
+#=========================================
+
+  #---------------------------------------
+  hdl:
+  #---------------------------------------
+    files        :
+      - hdl/pwm_pkg.vhd
+      - hdl/pwm_core.vhd
+      - hdl/sbi_PWM.vhd
+    file_type    : vhdlSource
+    logical_name : asylum
+    depend       :
+      - asylum:utils:generators
+      - asylum:utils:pkg
+
+#=========================================
+targets:
+#=========================================
+
+  #---------------------------------------
+  default: &default
+  #---------------------------------------
+    description     : Default Target
+    filesets        :
+      - hdl
+    toplevel        : sbi_PWM
+    default_tool    : ghdl
+    generate        :
+      - gen_csr
