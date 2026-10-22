@@ -47,7 +47,7 @@ filesets:
     file_type    : vhdlSource
     logical_name : asylum
     depend       :
-      - asylum:component:clock_divider
+      - ">=asylum:component:clock_divider:2.1.0"
       - asylum:utils:generators
       - asylum:utils:pkg
 

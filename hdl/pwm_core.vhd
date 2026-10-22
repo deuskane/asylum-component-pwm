@@ -98,19 +98,21 @@ begin  -- architecture rtl
   -- clock_divider in pulse mode : cke is 1 during one clock cycle every
   -- STATIC_PRESCALER_RATIO clock cycles. The prescaler, the PWM counter and
   -- the output only progress when cke = 1.
+  -- cke is a clock enable (data), not a clock : no clock buffer.
   -- clock_divider outputs clk_i itself when its ratio is 1 : not used then.
   gen_static_prescaler: if STATIC_PRESCALER_RATIO > 1
   generate
     ins_clock_divider : clock_divider
       generic map
-      (RATIO     => STATIC_PRESCALER_RATIO
-      ,ALGO      => "pulse"
+      (RATIO        => STATIC_PRESCALER_RATIO
+      ,ALGO         => "pulse"
+      ,BYPASS_CBUFG => true
       )
       port map
-      (clk_i     => clk_i
-      ,cke_i     => '1'
-      ,arstn_i   => arst_b_i
-      ,clk_div_o => cke
+      (clk_i        => clk_i
+      ,cke_i        => '1'
+      ,arstn_i      => arst_b_i
+      ,clk_div_o    => cke
       );
   end generate gen_static_prescaler;
 

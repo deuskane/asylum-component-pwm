@@ -237,7 +237,7 @@ Outside CI, GHDL writes a waveform `dut.fst`. CI ([.github/workflows/ci.yml](.gi
 
 No vendor synthesis target (the `lint_ghdl_synth_*` targets check the RTL with `ghdl --synth`, see [Targets](#targets)). The HDL sources of the `default` target (`hdl/*.vhd` + generated CSR) contain no simulation-only construct. `pwm_core` uses `2 x PRESCALER_WIDTH + 3 x COUNTER_WIDTH + 1` flip-flops (prescaler counter, shadow ratio, PWM counter, shadow period and duty, output), a zero detector on the prescaler counter, an equality comparator (end of period) and a magnitude comparator (duty), plus the `clock_divider` counter when `STATIC_PRESCALER_RATIO > 1`; in `sbi_PWM` the CSR bank stores 25 bits (17 when `USER_DEFINE_PRESCALER = false`). `pwm_o` comes straight from a flip-flop and can drive a pad directly.
 
-The pulse of `clock_divider` goes through its `cbufg` cell (techmap) before being used as a clock enable: a wire in the generic techmap, a clock resource (`NX_WFG`) in the `ng_medium` techmap.
+The pulse of `clock_divider` is a clock enable, not a clock: it is instantiated with `BYPASS_CBUFG = true` (no `cbufg` clock buffer, no clock resource, no generated clock), which needs `asylum:component:clock_divider` 2.1.0 or later.
 
 ## Design Notes
 
@@ -324,7 +324,7 @@ asylum-component-pwm/
 
 | Core | Used by (fileset) | Purpose |
 |------|-------------------|---------|
-| `asylum:component:clock_divider` | `hdl` | Static prescaler (`clock_divider`, pulse mode) of `pwm_core` |
+| `asylum:component:clock_divider` (>= 2.1.0) | `hdl` | Static prescaler (`clock_divider`, pulse mode, `BYPASS_CBUFG = true`) of `pwm_core` |
 | `asylum:utils:generators` | `hdl` | regtool generator and CSR building block (`csr_reg`) |
 | `asylum:utils:pkg` | `hdl` | Common packages (`sbi_pkg`, ...) |
 | `bitvis:verification:uvvm` | `sim_basic` | UVVM utility library and SBI VIP (testbench only) |
