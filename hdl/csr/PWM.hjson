@@ -1,0 +1,91 @@
+{
+    name      : "PWM",
+    width     : 8,
+    desc      : "CSR for PWM"
+    interface : "sbi"
+
+    parameters : [
+    	{
+	    name         : "USER_DEFINE_PRESCALER"
+	    desc         : "Parameters to enable the User define Prescaler"
+	    type         : "boolean"
+	}
+    	{
+	    name         : "PRESCALER_RATIO"
+	    desc         : "Default value for prescaler ratio"
+	    type         : "std_logic_vector(7 downto 0)"
+	}
+    ]
+
+    registers : [
+	{
+            name         : "cfg",
+            address      : "x0",
+            desc         : "PWM Configuration Register",
+            swaccess     : "rw",
+            hwaccess     : "ro",
+
+            fields: [
+                {
+                    name: "enable",
+                    bits: "0",
+                    desc: "0 : PWM is disabled (counter cleared, output low), 1 : PWM is enabled, the first period starts with the high phase (up to STATIC_PRESCALER_RATIO CLK cycles after the write)"
+                },
+            ]
+        },
+
+	{
+            name         : "prescaler",
+            address      : "x1",
+            desc         : "PWM Clock Prescaler. A tick of the PWM counter lasts STATIC_PRESCALER_RATIO*(prescaler+1) CLK cycles (STATIC_PRESCALER_RATIO : generic of sbi_PWM, 1 by default). Taken into account at the start of the next PWM period"
+            swaccess     : "rw",
+            hwaccess     : "ro",
+            hwtype       : "reg",
+            enable       : "USER_DEFINE_PRESCALER",
+
+            fields: [
+                {
+                    name: "ratio",
+                    bits: "7:0",
+                    desc: "Number of steps of the static prescaler minus one of a tick (CLK cycles minus one if STATIC_PRESCALER_RATIO = 1)"
+                    expr: "PRESCALER_RATIO"
+                },
+            ]
+        },
+
+	{
+            name         : "period",
+            address      : "x2",
+            desc         : "PWM Period. The PWM period is (period+1) ticks, i.e. (period+1)*STATIC_PRESCALER_RATIO*(prescaler+1) CLK cycles. Taken into account at the start of the next PWM period",
+            swaccess     : "rw",
+            hwaccess     : "ro",
+
+            fields: [
+                {
+                    name: "value",
+                    bits: "7:0",
+                    init: "xFF",
+                    desc: "Number of ticks minus one of the PWM period"
+                },
+            ]
+        },
+
+	{
+            name         : "duty",
+            address      : "x3",
+            desc         : "PWM Duty Cycle. The output is high during the first duty ticks of each PWM period : 0 : always low, greater than period : always high. Taken into account at the start of the next PWM period",
+            swaccess     : "rw",
+            hwaccess     : "ro",
+
+            fields: [
+                {
+                    name: "value",
+                    bits: "7:0",
+                    init: "x00",
+                    desc: "Number of ticks of the high phase"
+                },
+            ]
+        },
+
+]
+}

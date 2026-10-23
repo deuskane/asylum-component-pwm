@@ -1,0 +1,31 @@
+default                             : Default Target
+lint_ghdl                           : Lint with GHDL (-Wall analysis and elaboration of sbi_PWM_synth_top)
+lint_ghdl_synth_default             : Synthesis check of sbi_PWM_synth_top, default generics (also the generics of the sim_ targets of tb_PWM)
+lint_ghdl_synth_fixed_prescaler     : Synthesis check of sbi_PWM_synth_top, fixed prescaler (generics of the sim_fixed_prescaler targets)
+lint_ghdl_synth_static_prescaler    : Synthesis check of sbi_PWM_synth_top, static prescaler (generics of the sim_static_prescaler targets)
+sim_core_always_high                : pwm_core, duty greater than period
+sim_core_full_period                : pwm_core, maximum period (4096 ticks)
+sim_core_prescaler                  : pwm_core, maximum prescaler ratio, period 1000 ticks
+sim_core_update_duty                : pwm_core, maximum duty written while running
+sim_disable_enable                  : sbi_PWM, disable during the high phase then enable
+sim_disabled                        : sbi_PWM, output low while the PWM is disabled
+sim_duty                            : sbi_PWM, duty 0, 1, period, period+1 and 255
+sim_fixed_prescaler                 : sbi_PWM fixed prescaler 2, timing with the fixed ratio
+sim_fixed_prescaler_registers       : sbi_PWM fixed prescaler 2, prescaler register not writable
+sim_fixed_prescaler_reset_values    : sbi_PWM fixed prescaler 2, reset values (prescaler read 0)
+sim_frequency_1khz                  : sbi_PWM, reset values of prescaler and period (1 kHz with a 50 MHz clock)
+sim_no_prescaler                    : sbi_PWM, start latency and timing with prescaler 0
+sim_period_0                        : sbi_PWM, PWM period of one tick
+sim_prescaler                       : sbi_PWM, start latency and timing with prescaler 4
+sim_registers                       : sbi_PWM, read and write of the registers
+sim_reset                           : sbi_PWM, asynchronous reset while running
+sim_reset_values                    : sbi_PWM, reset values of the registers and of the output
+sim_static_prescaler                : sbi_PWM static prescaler 20, tick of 20 x (prescaler+1) cycles, start on a pulse
+sim_static_prescaler_disable_enable : sbi_PWM static prescaler 20, disable not delayed by the static prescaler
+sim_static_prescaler_reset          : sbi_PWM static prescaler 20, asynchronous reset while running
+sim_static_prescaler_servo_50hz     : sbi_PWM static prescaler 20, servo 50 Hz (1.5 ms pulse every 20 ms)
+sim_static_prescaler_update_duty    : sbi_PWM static prescaler 20, duty taken into account at the next period
+sim_update_duty                     : sbi_PWM, duty changed during a period, taken into account at the next one
+sim_update_period                   : sbi_PWM, period changed during a period (increased, decreased below the counter)
+sim_update_prescaler                : sbi_PWM, prescaler changed during a period, taken into account at the next one
+
