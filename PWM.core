@@ -103,14 +103,22 @@ filesets:
       - bitvis:verification:uvvm
 
   #---------------------------------------
-  # Lint Files (pre_run hook of lint_ghdl_synth_*)
+  syn:
   #---------------------------------------
-  files_lint:
-    files:
-      - syn/ghdl/sbi_PWM_synth_top.vhd
-      - syn/ghdl/ghdl_synth.sh : {file_type : user, copyto : ghdl_synth.sh}
-      - syn/ghdl/ghdl_synth.mk : {file_type : user, copyto : ghdl_synth.mk}
-    file_type : vhdlSource-2008
+    files        :
+      - syn/sbi_PWM_wrapper.vhd
+    file_type    : vhdlSource-2008
+    logical_name : asylum
+    # ghdl_synth.sh / ghdl_synth.mk (pre_run hook of lint_ghdl_synth_*)
+    depend       :
+      - asylum:utils:ghdl_synth
+
+  #---------------------------------------
+  syn_yosys:
+  #---------------------------------------
+    # yosys_synth.sh / yosys_synth.mk / yosys_synth.py (pre_run hook of syn_*)
+    depend       :
+      - asylum:utils:yosys_synth
 
 #=========================================
 targets:
@@ -132,9 +140,9 @@ targets:
   #---------------------------------------
   lint_ghdl : &lint_ghdl
     << : *default
-    description     : Lint with GHDL (-Wall analysis and elaboration of sbi_PWM_synth_top)
-    toplevel        : sbi_PWM_synth_top
-    filesets_append : [files_lint]
+    description     : Lint with GHDL (-Wall analysis and elaboration of sbi_PWM_wrapper)
+    toplevel        : asylum.sbi_PWM_wrapper
+    filesets_append : [syn]
     default_tool    : ghdl
     tools :
       ghdl :
@@ -142,13 +150,14 @@ targets:
 
   #---------------------------------------
   # Synthesis check : -Wall analysis, ghdl --synth -Wall and elaboration
-  # (no simulation) of sbi_PWM_synth_top with the generics of the target.
-  # The pre_run hook adds syn/ghdl/ghdl_synth.mk to the edalize Makefile.
+  # (no simulation) of sbi_PWM_wrapper with the generics of the target.
+  # The pre_run hook (ghdl_synth.sh of asylum:utils:ghdl_synth) adds
+  # ghdl_synth.mk to the edalize Makefile.
   # FuseSoC merges tools in depth : analyze_options comes from lint_ghdl.
   #---------------------------------------
   lint_ghdl_synth_default : &lint_ghdl_synth
     << : *lint_ghdl
-    description     : Synthesis check of sbi_PWM_synth_top, default generics (also the generics of sim_pwm)
+    description     : Synthesis check of sbi_PWM_wrapper, default generics (also the generics of sim_pwm)
     tools :
       ghdl :
         run_options     : ["--no-run"]
@@ -159,7 +168,7 @@ targets:
   lint_ghdl_synth_fixed_prescaler :
   #---------------------------------------
     << : *lint_ghdl_synth
-    description     : Synthesis check of sbi_PWM_synth_top, fixed prescaler (generics of sim_pwm_fixed_prescaler)
+    description     : Synthesis check of sbi_PWM_wrapper, fixed prescaler (generics of sim_pwm_fixed_prescaler)
     parameters      :
       - USER_DEFINE_PRESCALER=false
       - PRESCALER_RATIO=00000010
@@ -168,7 +177,41 @@ targets:
   lint_ghdl_synth_static_prescaler :
   #---------------------------------------
     << : *lint_ghdl_synth
-    description     : Synthesis check of sbi_PWM_synth_top, static prescaler (generics of sim_pwm_static_prescaler)
+    description     : Synthesis check of sbi_PWM_wrapper, static prescaler (generics of sim_pwm_static_prescaler)
+    parameters      :
+      - STATIC_PRESCALER_RATIO=20
+
+  #---------------------------------------
+  # Synthesis : size of sbi_PWM_wrapper with the generics of the target,
+  # Xilinx Artix-7 (LUT, FF, BRAM, DSP) and sky130 (area), by Yosys and
+  # its GHDL plugin. Same configurations as lint_ghdl_synth_*.
+  # The pre_run hook (yosys_synth.sh of asylum:utils:yosys_synth) adds
+  # yosys_synth.mk to the edalize Makefile.
+  #---------------------------------------
+  syn_default : &syn
+    << : *lint_ghdl
+    description     : Synthesis (Artix-7, sky130) of sbi_PWM_wrapper, default generics (also the generics of sim_pwm)
+    filesets_append : [syn, syn_yosys]
+    tools :
+      ghdl :
+        run_options     : ["--no-run"]
+    hooks :
+      pre_run : [yosys_synth]
+
+  #---------------------------------------
+  syn_fixed_prescaler :
+  #---------------------------------------
+    << : *syn
+    description     : Synthesis (Artix-7, sky130) of sbi_PWM_wrapper, fixed prescaler (generics of sim_pwm_fixed_prescaler)
+    parameters      :
+      - USER_DEFINE_PRESCALER=false
+      - PRESCALER_RATIO=00000010
+
+  #---------------------------------------
+  syn_static_prescaler :
+  #---------------------------------------
+    << : *syn
+    description     : Synthesis (Artix-7, sky130) of sbi_PWM_wrapper, static prescaler (generics of sim_pwm_static_prescaler)
     parameters      :
       - STATIC_PRESCALER_RATIO=20
 
@@ -463,6 +506,12 @@ scripts:
   ghdl_synth :
     cmd : [bash, ghdl_synth.sh]
 
+  #---------------------------------------
+  # pre_run hook of syn_* (cwd = work_root)
+  #---------------------------------------
+  yosys_synth :
+    cmd : [bash, yosys_synth.sh]
+
 #=========================================
 parameters :
 #=========================================
@@ -492,7 +541,7 @@ parameters :
     paramtype   : generic
 
   #---------------------------------------
-  # Generics of sbi_PWM_synth_top (lint_ghdl_synth_*) and of tb_PWM (sim_*)
+  # Generics of sbi_PWM_wrapper (lint_ghdl_synth_*, syn_*) and of tb_PWM (sim_*)
   #---------------------------------------
   STATIC_PRESCALER_RATIO :
     description : Static prescaler, clock cycles per step of the prescaler (1 = no static prescaler)
