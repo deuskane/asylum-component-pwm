@@ -1,119 +1,92 @@
 <!--
-  README GENERATION INSTRUCTIONS (for the next regeneration run)
+  README MODEL (common to every Asylum IP, keep the same headings)
   ----------------------------------------------------------------
-  This README follows the common Asylum IP model. Regenerate it from the
-  sources, never from the previous README text alone.
-
-  Sources of truth (in priority order):
-    1. hdl/*.vhd            : entities, generics, ports, packages
-    2. hdl/csr/*.hjson      : register map (regtool); *_csr.md/.h are generated
-    3. <IP>.core            : VLNV (name), filesets, targets, depends, revisions
-    4. mk/targets.txt       : target list shown by `make help`; mk/defs.mk
-    5. sim/, syn/, esw/, boards/ : testbenches, constraints, software
-  Section order (keep it, same headings in every IP):
-    CI badge / Title + one-line description + VLNV / Table of Contents /
-    Introduction (Key Features) / Block Diagram / Top-Level (Parameters,
-    Ports, Instantiation Example) / HDL Modules / Register Map /
-    Verification / Synthesis / Design Notes (optional) /
-    Directory Structure / Dependencies
+  Regenerate from the sources, never from the previous README text alone:
+    hdl/*.vhd (entities, generics, ports), hdl/csr/*.hjson (register map),
+    <IP>.core (VLNV, targets, depends), mk/targets.txt, sim/, syn/, esw/.
+  Sections, in this order:
+    badges / title + one-line pitch / Overview / Features / Block Diagram /
+    Getting Started / Hardware Interfaces / Configuration / Resources /
+    Theory of Operation / Registers / Programmer's Guide /
+    Design Verification / Dependencies and Related IPs / License
   Rules:
-    - Language: English. Tables: Parameters = Name|Type|Default|Description,
-      Ports = Name|Direction|Type|Description (grouped by interface).
-    - Register Map: link to the generated hdl/csr/<X>_csr.md (plus the
-      .hjson source and _csr.h header); never copy register tables here.
-    - Top-Level = sbi_* wrapper if present, else the entity used by the
-      `default` target, else the main entity (libraries: list packages).
-    - Write "This IP has no software-visible registers." / "No dedicated
-      synthesis target ..." instead of removing a section.
-    - Keep still-accurate hand-written content (ISA tables, results,
-      images) in "Design Notes"; drop anything not backed by the sources.
-    - Block diagram: doc/<NAME>.drawio (NAME = 4th field of the VLNV),
-      top entity box with generics on top, inputs left, outputs right,
-      bus interfaces as bold arrows, internal blocks colour-coded
-      (CSR yellow, FIFO/memory green, core logic blue, external grey).
-      Update it whenever ports/generics/sub-blocks change.
-    - Do not edit generated files (hdl/csr/*_csr.*) or the CI badge URL.
+    - English, short and factual: every statement backed by the sources.
+    - No VLNV line: the version badge shows it.
+    - Badges: first line version, license; second line CI, lint, sim, syn.
+    - Block diagram and FSM: pages Overview and FSM of doc/<NAME>.drawio, exported to
+      doc/<NAME>-Overview.png and doc/<NAME>-FSM.png (make -C doc).
+    - Timing diagrams: WaveDrom source doc/<NAME>-<what>.json, rendered
+      doc/<NAME>-<what>.svg (make -C doc), shown as images.
+    - No CPU named (OpenBlaze, PicoBlaze, RISC-V) outside the CPU and SoC IPs.
+    - Registers: link to the generated hdl/csr/<X>_csr.md, never copy the tables.
+    - Tables: Configuration = Name|Type|Default|Description,
+      Hardware Interfaces = Name|Direction|Type|Description, grouped by interface.
+    - A section with nothing to say is one line ("This IP has no
+      software-visible registers."), never removed.
 -->
+[![Version](https://img.shields.io/github/v/tag/deuskane/asylum-component-pwm?filter=asylum-component-PWM-*&label=version&color=blue)](https://github.com/deuskane/asylum-component-pwm/tags)
+[![License](https://img.shields.io/github/license/deuskane/asylum-component-pwm)](LICENSE)
+
 [![CI](https://github.com/deuskane/asylum-component-pwm/actions/workflows/ci.yml/badge.svg)](https://github.com/deuskane/asylum-component-pwm/actions/workflows/ci.yml)
+[![lint](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fdeuskane%2Fasylum-component-pwm%2Fbadges%2Flint.json)](https://github.com/deuskane/asylum-component-pwm/actions/workflows/ci.yml)
+[![sim](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fdeuskane%2Fasylum-component-pwm%2Fbadges%2Fsim.json)](https://github.com/deuskane/asylum-component-pwm/actions/workflows/ci.yml)
+[![syn](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fdeuskane%2Fasylum-component-pwm%2Fbadges%2Fsyn.json)](https://github.com/deuskane/asylum-component-pwm/actions/workflows/ci.yml)
 
-# asylum-component-pwm
+# PWM
 
-**Single channel PWM with CSR access over the SBI bus: static prescaler (generic), 8-bit prescaler, 8-bit period and duty cycle, glitch-free update at the start of the next PWM period.**
+**A small, readable PWM generator in VHDL: one output, 8-bit prescaler, period and duty, optional static prescaler, glitch-free updates at the start of the next period.**
 
-VLNV: `asylum:component:PWM:1.0.0`
+Part of the [Asylum project](https://github.com/deuskane/asylum-project), a collection of small IP cores, written to be read and learned from.
 
 ## Table of Contents
 
-1. [Introduction](#introduction)
-2. [Block Diagram](#block-diagram)
-3. [Top-Level](#top-level)
-4. [HDL Modules](#hdl-modules)
-5. [Register Map](#register-map)
-6. [Verification](#verification)
-7. [Synthesis](#synthesis)
-8. [Design Notes](#design-notes)
-9. [Directory Structure](#directory-structure)
-10. [Dependencies](#dependencies)
+1. [Overview](#overview)
+2. [Features](#features)
+3. [Block Diagram](#block-diagram)
+4. [Getting Started](#getting-started)
+5. [Hardware Interfaces](#hardware-interfaces)
+6. [Configuration](#configuration)
+7. [Resources](#resources)
+8. [Theory of Operation](#theory-of-operation)
+9. [Registers](#registers)
+10. [Programmer's Guide](#programmers-guide)
+11. [Design Verification](#design-verification)
+12. [Dependencies and Related IPs](#dependencies-and-related-ips)
+13. [License](#license)
 
-## Introduction
+## Overview
 
-This IP is the PWM (Pulse Width Modulation) generator of the Asylum project. Software drives it through 4 registers on the SBI bus: `cfg` (enable), `prescaler` (duration of a tick), `period` (number of ticks of a PWM period) and `duty` (number of ticks of the high phase). A static prescaler, set at elaboration (`STATIC_PRESCALER_RATIO`, a `clock_divider` in pulse mode), divides the clock before the prescaler to reach low PWM frequencies (50 Hz for a servo) without wider registers. The CSR has no status and no interrupt: the configuration is copied into shadow registers at the start of each PWM period, so software can write it at any time without synchronizing with the output. The PWM itself is implemented by `pwm_core`, which is independent of the CSR and of the bus interface (plain configuration signals, generic widths).
+This IP generates a PWM (Pulse Width Modulation) signal: LED dimming, motor speed, servo position. Software drives it through four 8-bit registers on the SBI bus (the simple bus of Asylum): `cfg` (enable), `prescaler` (duration of a tick), `period` (ticks of a PWM period) and `duty` (ticks of the high phase).
 
-### Key Features
+A static prescaler, set by a generic (`STATIC_PRESCALER_RATIO`), divides the clock before the prescaler to reach low frequencies (50 Hz for a servo) with 8-bit registers. The configuration is copied into shadow registers at the start of each PWM period: software writes it at any time, without status or interrupt, and the output never glitches.
 
-- Single PWM output `pwm_o`, driven by a register (no glitch)
-- Static prescaler: `clock_divider` in pulse mode, one prescaler step every `STATIC_PRESCALER_RATIO` clock cycles (1: none)
-- PWM period = (period + 1) x (prescaler + 1) x STATIC_PRESCALER_RATIO clock cycles, high phase = duty x (prescaler + 1) x STATIC_PRESCALER_RATIO clock cycles
-- Duty 0: always low; duty > period: always high
-- Configuration (prescaler, period, duty) taken into account at the start of the next PWM period: no truncated or doubled pulse, the counter never overflows
-- `cfg.enable = 0`: counter cleared, output low one clock cycle after the write; the first PWM period starts with its high phase on the next pulse of the static prescaler (one clock cycle after the enable without static prescaler)
-- Prescaler register optional (`USER_DEFINE_PRESCALER`), reset / fixed value `PRESCALER_RATIO` (1 kHz with a 50 MHz clock and the reset value of `period`)
-- `pwm_core` usable alone, with generic static prescaler and prescaler / counter widths (`STATIC_PRESCALER_RATIO`, `PRESCALER_WIDTH`, `COUNTER_WIDTH`)
+The PWM itself is `pwm_core`, independent of the registers and of the bus (plain configuration signals, generic widths): it can be used alone with wider counters.
+
+## Features
+
+- One output `pwm_o`, driven by a flip-flop
+- PWM period of `(period + 1) x (prescaler + 1) x STATIC_PRESCALER_RATIO` clock cycles, high phase of `duty` ticks; duty 0: always low, duty greater than period: always high
+- Static prescaler: one prescaler step every `STATIC_PRESCALER_RATIO` clock cycles (a `clock_divider` in pulse mode used as a clock enable, no clock buffer); 1: none
+- `prescaler`, `period` and `duty` taken into account at the start of the next PWM period: no truncated or doubled pulse, no counter overflow
+- Disable: counter cleared, output low one clock cycle after the write; enable: the first period starts with its high phase on the next step of the static prescaler
+- Prescaler register optional (`USER_DEFINE_PRESCALER`), reset or fixed value `PRESCALER_RATIO` (1 kHz with a 50 MHz clock and the reset value of `period`)
+- Zero wait state bus accesses
 
 ## Block Diagram
 
-Diagram: [doc/PWM.drawio](doc/PWM.drawio) (open with diagrams.net or the VS Code Draw.io extension; `make -C doc` exports `doc/PWM-Overview.png` with the drawio CLI).
+![Block diagram of sbi_PWM](doc/PWM-Overview.png)
 
-- The SBI bus accesses `PWM_registers` (generated by regtool from [hdl/csr/PWM.hjson](hdl/csr/PWM.hjson)): `cfg`, `prescaler` (when `USER_DEFINE_PRESCALER = true`), `period`, `duty`.
-- The register values go to `pwm_core` ([hdl/pwm_core.vhd](hdl/pwm_core.vhd)); there is no hardware to software path.
-- In `pwm_core`, the static prescaler (`clock_divider`, pulse mode, present when `STATIC_PRESCALER_RATIO > 1`) generates one enable pulse every `STATIC_PRESCALER_RATIO` clock cycles; the shadow registers hold the ratio, period and duty of the current PWM period; the prescaler generates one tick every `ratio + 1` enable pulses; the PWM counter counts the ticks from 0 to `period`; the comparator drives `pwm_o` high while the counter is lower than `duty`.
+## Getting Started
 
-## Top-Level
+The cores of the Asylum IPs are published in the FuseSoC library [asylum-cores](https://github.com/deuskane/asylum-cores) (with the UVVM core used by the testbenches):
 
-Top-level entity: **`sbi_PWM`** ([hdl/sbi_PWM.vhd](hdl/sbi_PWM.vhd)), library `asylum`, component declared in `asylum.pwm_pkg`.
+```bash
+pip install fusesoc
+fusesoc library add https://github.com/deuskane/asylum-cores
+fusesoc run --target sim_pwm_update_duty asylum:component:PWM  # needs GHDL
+```
 
-### Parameters
-
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `NAME` | string | `""` | Instance name, forwarded to the CSR block (`MODULE_NAME`, visible in `sbi_tgt_o.info`) |
-| `STATIC_PRESCALER_RATIO` | positive | `1` | Static prescaler: clock cycles per step of the prescaler (`clock_divider` in pulse mode). 1: no static prescaler. 20: 50 Hz with a 50 MHz clock, `prescaler = 249` and `period = 199` |
-| `USER_DEFINE_PRESCALER` | boolean | `true` | `true`: the `prescaler` register exists and is software-writable; `false`: the ratio is fixed to `PRESCALER_RATIO` (the `prescaler` address reads 0) |
-| `PRESCALER_RATIO` | std_logic_vector(7 downto 0) | `x"C2"` | Reset / fixed value of the prescaler ratio (`x"C2"`: 1001.6 Hz with a 50 MHz clock, `STATIC_PRESCALER_RATIO = 1` and `period = 0xFF`) |
-
-### Ports
-
-#### Clock & Reset
-
-| Name | Direction | Type | Description |
-|------|-----------|------|-------------|
-| `clk_i` | in | std_logic | System clock (also the PWM clock) |
-| `arst_b_i` | in | std_logic | Asynchronous reset, active low |
-
-#### Bus (SBI)
-
-| Name | Direction | Type | Description |
-|------|-----------|------|-------------|
-| `sbi_ini_i` | in | sbi_ini_t | SBI request from the initiator (`cs`, `re`, `we`, `addr`, `wdata`) |
-| `sbi_tgt_o` | out | sbi_tgt_t | SBI response to the initiator (`ready`, `rdata`, `info`) |
-
-#### PWM
-
-| Name | Direction | Type | Description |
-|------|-----------|------|-------------|
-| `pwm_o` | out | std_logic | PWM output, low while the PWM is disabled |
-
-### Instantiation Example
+To use the IP in your design, add `asylum:component:PWM` to the `depend` list of your core and instantiate `sbi_PWM` (library `asylum`):
 
 ```vhdl
 library asylum;
@@ -131,163 +104,96 @@ use     asylum.pwm_pkg.all;
     port map
     ( clk_i     => clk
      ,arst_b_i  => arst_b
-     ,sbi_ini_i => sbi_inis(PWM0_ID)  -- sbi_ini_t(addr(1 downto 0), wdata(7 downto 0))
-     ,sbi_tgt_o => sbi_tgts(PWM0_ID)  -- sbi_tgt_t(rdata(7 downto 0))
+     ,sbi_ini_i => sbi_ini           -- 2 address bits, 8-bit data
+     ,sbi_tgt_o => sbi_tgt
      ,pwm_o     => pwm0
     );
 ```
 
-The CSR bank uses 2 address bits (`PWM_ADDR_WIDTH = 2`) and 8-bit data (`PWM_DATA_WIDTH = 8`), see `asylum.PWM_csr_pkg`.
+## Hardware Interfaces
 
-## HDL Modules
+Top-level entity: **`sbi_PWM`** ([hdl/sbi_PWM.vhd](hdl/sbi_PWM.vhd)), component in `asylum.pwm_pkg`.
 
-| File | Unit | Kind | Role |
-|------|------|------|------|
-| [hdl/pwm_pkg.vhd](hdl/pwm_pkg.vhd) | `pwm_pkg` | package | Component declarations of `sbi_PWM` and `pwm_core` |
-| [hdl/pwm_core.vhd](hdl/pwm_core.vhd) | `pwm_core` | entity | Static prescaler (`clock_divider`), shadow registers, prescaler, PWM counter, registered comparator. Independent of the CSR and of the SBI |
-| [hdl/sbi_PWM.vhd](hdl/sbi_PWM.vhd) | `sbi_PWM` | entity | Top-level: CSR + `pwm_core` (static prescaler, 8-bit prescaler, 8-bit counter) |
-| hdl/csr/PWM_csr.vhd | `PWM_registers` | entity | Generated CSR bank (regtool) |
-| hdl/csr/PWM_csr_pkg.vhd | `PWM_csr_pkg` | package | Generated types (`PWM_sw2hw_t`), address constants and `PWM_registers` component |
-
-### pwm_core
-
-`pwm_core` can be used without the CSR, for example with wider counters for a lower PWM frequency.
-
-#### Parameters
-
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `STATIC_PRESCALER_RATIO` | positive | `1` | Clock cycles per enable pulse of the prescaler (`clock_divider` in pulse mode, not instantiated when 1) |
-| `PRESCALER_WIDTH` | natural | `8` | Width of `cfg_prescaler_ratio_i` |
-| `COUNTER_WIDTH` | natural | `8` | Width of `cfg_period_i` and `cfg_duty_i` (resolution of the PWM) |
-
-#### Ports
+### Clock and Reset
 
 | Name | Direction | Type | Description |
 |------|-----------|------|-------------|
-| `clk_i` | in | std_logic | System clock |
+| `clk_i` | in | std_logic | System clock, the only clock of the IP |
 | `arst_b_i` | in | std_logic | Asynchronous reset, active low |
-| `cfg_enable_i` | in | std_logic | 0: counter cleared, `pwm_o` low, shadow registers loaded continuously; 1: PWM running (from the next enable pulse of the static prescaler) |
-| `cfg_prescaler_ratio_i` | in | std_logic_vector(PRESCALER_WIDTH-1 downto 0) | Duration of a tick minus one, in enable pulses of the static prescaler (clock cycles when `STATIC_PRESCALER_RATIO = 1`) |
+
+### Bus (SBI)
+
+| Name | Direction | Type | Description |
+|------|-----------|------|-------------|
+| `sbi_ini_i` | in | sbi_ini_t | Request from the initiator (`cs`, `re`, `we`, `addr`, `wdata`); 2 address bits, 8-bit data |
+| `sbi_tgt_o` | out | sbi_tgt_t | Response to the initiator (`ready`, always `'1'`, `rdata`, `info`) |
+
+### PWM
+
+| Name | Direction | Type | Description |
+|------|-----------|------|-------------|
+| `pwm_o` | out | std_logic | PWM output, from a flip-flop, low while the PWM is disabled |
+
+<details>
+<summary><b>pwm_core</b>: the PWM without the registers</summary>
+
+[hdl/pwm_core.vhd](hdl/pwm_core.vhd), component in `asylum.pwm_pkg`. Same `clk_i`, `arst_b_i` and `pwm_o` as the top level, and the configuration as plain signals:
+
+| Name | Direction | Type | Description |
+|------|-----------|------|-------------|
+| `cfg_enable_i` | in | std_logic | 0: counter cleared, `pwm_o` low, shadow registers loaded every cycle; 1: PWM running |
+| `cfg_prescaler_ratio_i` | in | std_logic_vector(PRESCALER_WIDTH-1 downto 0) | Duration of a tick minus one, in steps of the static prescaler |
 | `cfg_period_i` | in | std_logic_vector(COUNTER_WIDTH-1 downto 0) | PWM period minus one, in ticks |
 | `cfg_duty_i` | in | std_logic_vector(COUNTER_WIDTH-1 downto 0) | High phase, in ticks (greater than `cfg_period_i`: always high) |
-| `pwm_o` | out | std_logic | PWM output (register) |
 
-## Register Map
+Generics: `STATIC_PRESCALER_RATIO` (as `sbi_PWM`), `PRESCALER_WIDTH` and `COUNTER_WIDTH` (natural, default 8; `sbi_PWM` uses 8 and 8).
 
-The register map is generated by regtool from [hdl/csr/PWM.hjson](hdl/csr/PWM.hjson):
+</details>
 
-- Register documentation: **[hdl/csr/PWM_csr.md](hdl/csr/PWM_csr.md)**
-- C header: [hdl/csr/PWM_csr.h](hdl/csr/PWM_csr.h)
+## Configuration
 
-Notes:
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `NAME` | string | `""` | Instance name, visible in `sbi_tgt_o.info` |
+| `STATIC_PRESCALER_RATIO` | positive | `1` | Clock cycles per step of the prescaler. 1: no static prescaler. 20: 50 Hz with a 50 MHz clock, `prescaler = 249` and `period = 199` |
+| `USER_DEFINE_PRESCALER` | boolean | `true` | `true`: the `prescaler` register exists; `false`: the ratio is fixed to `PRESCALER_RATIO` and the `prescaler` address reads 0 |
+| `PRESCALER_RATIO` | std_logic_vector(7 downto 0) | `x"C2"` | Reset value (or fixed value) of the prescaler ratio; `x"C2"`: 1001.6 Hz with a 50 MHz clock, `STATIC_PRESCALER_RATIO = 1` and `period = 0xFF` |
 
-- 4 registers: `cfg` (0x0, `enable` bit), `prescaler` (0x1), `period` (0x2), `duty` (0x3). Reset values: `cfg = 0x00`, `prescaler = PRESCALER_RATIO`, `period = 0xFF`, `duty = 0x00`.
-- The `prescaler` register only exists when `USER_DEFINE_PRESCALER = true`.
-- `prescaler`, `period` and `duty` are read back as written; the values used by the PWM are the shadow copies, updated at the start of the next PWM period (see [Configuration Update](#configuration-update)).
+## Resources
 
-## Verification
+Figures of the `syn_*` targets (`make nonreg_syn`, see [Targets](#targets)): [syn/sbi_PWM_wrapper.vhd](syn/sbi_PWM_wrapper.vhd) with the generics of each configuration, synthesized by Yosys and its GHDL plugin; the reports are in the build directory of each target.
 
-### Testbenches
+| Configuration | LUT¹ | LUTRAM¹ | FF¹ | CARRY4¹ | MUXF7/F8¹ | BRAM¹ | DSP¹ | Area² (µm²) | kGE³ |
+|---|---|---|---|---|---|---|---|---|---|
+| `syn_default` (default generics) | 132 | 0 | 66 | 5 | 17 | 0 | 0 | 2977.86 | 0.793 |
+| `syn_fixed_prescaler` (no prescaler register, ratio fixed to 2) | 101 | 0 | 51 | 5 | 9 | 0 | 0 | 2212.12 | 0.589 |
+| `syn_static_prescaler` (`STATIC_PRESCALER_RATIO = 20`) | 175 | 0 | 72 | 7 | 38 | 0 | 0 | 3159.28 | 0.842 |
 
-One scenario per simulation: the testbenches have a `TEST` generic, and each `sim_*` target sets `TEST` and the generics of the DUT configuration (FuseSoC `parameters`). The checks are self-checking UVVM checks; the high phase and the period of `pwm_o` are measured in clock cycles and checked exactly, constant levels with `check_stable`.
+¹ Xilinx Artix-7 (LUT6), Yosys 0.33 `synth_xilinx -flatten -noiopad -noclkbuf`, before place and route: every cell of the netlist is counted, Vivado may differ. An `INV` counts as a `LUT1`: `synth_xilinx` puts one on the reset pin of each flip-flop with the active-low reset (74 of the 132 LUTs of `syn_default`). The IP has no memory: no LUTRAM, no BRAM. Flip-flops of `syn_default`: 25 register bits (`cfg`, `prescaler`, `period`, `duty`), 24 shadow bits, the prescaler and PWM counters (8 + 8) and the output; the static prescaler (`clock_divider`) adds 6.
 
-| File | DUT | Description |
-|------|-----|-------------|
-| [sim/basic/tb_PWM.vhd](sim/basic/tb_PWM.vhd) | `sbi_PWM` | Generics `TEST`, `STATIC_PRESCALER_RATIO`, `USER_DEFINE_PRESCALER`, `PRESCALER_RATIO` (those of the DUT). The CSR are accessed with the SBI BFM (`bitvis_vip_sbi`). The expected durations are computed from the generics: a tick lasts `STATIC_PRESCALER_RATIO x (ratio + 1)` clock cycles, the ratio being `PRESCALER_RATIO` when `USER_DEFINE_PRESCALER = false`, and the first period starts less than `STATIC_PRESCALER_RATIO` clock cycles after the end of the write of `cfg.enable` |
-| [sim/core/tb_pwm_core.vhd](sim/core/tb_pwm_core.vhd) | `pwm_core` | Generics `TEST`, `PRESCALER_WIDTH`, `COUNTER_WIDTH`. The configuration ports are driven directly (no CSR, no SBI); the values of the scenarios are derived from the widths (maximum ratio, maximum period) |
-| [sim/common/tb_pwm_pkg.vhd](sim/common/tb_pwm_pkg.vhd) | | Shared clock period and checks: `wait_edge`, `check_periods` (high phase and period of N PWM periods), `check_constant` |
+² SkyWater sky130 `sky130_fd_sc_hd`, typical corner (tt, 25 °C, 1.80 V), Yosys 0.33 `synth` + `dfflibmap` + `abc -liberty`: standard-cell area only, no timing constraint, no buffering, clock tree or placement.
 
-### Targets
+³ Area in thousands of NAND2 gate equivalents (`sky130_fd_sc_hd__nand2_1` = 3.7536 µm²).
 
-| Target | Toplevel | Description |
-|--------|----------|-------------|
-| `default` | `sbi_PWM` | HDL fileset + CSR generation (not a simulation) |
-| `sim_reset_values` | `tb_PWM` | Reset values of the 4 registers, output low |
-| `sim_registers` | `tb_PWM` | Read / write of `prescaler`, `period`, `duty` with 4 patterns, only `cfg.enable` implemented |
-| `sim_disabled` | `tb_PWM` | Output low while the PWM is disabled |
-| `sim_no_prescaler` | `tb_PWM` | Start latency (first rising edge within one clock cycle after the write of `cfg`), first period complete, timing with prescaler 0 |
-| `sim_prescaler` | `tb_PWM` | Same with prescaler 4 |
-| `sim_duty` | `tb_PWM` | Duty 0 (always low), 1, `period` (low during one tick), `period + 1` and 255 (always high) |
-| `sim_period_0` | `tb_PWM` | PWM period of one tick |
-| `sim_update_duty` | `tb_PWM` | Duty decreased during the high phase (no truncated pulse), increased during the low phase (no second pulse): taken into account at the next period |
-| `sim_update_period` | `tb_PWM` | Period increased (current period not extended), duty and period decreased below the counter (no counter overflow) |
-| `sim_update_prescaler` | `tb_PWM` | Prescaler decreased during a period: the current period keeps its ticks |
-| `sim_disable_enable` | `tb_PWM` | Disable during the high phase (output low one cycle later), enable again (new period from the start), disable during the low phase (counter cleared), enable again |
-| `sim_frequency_1khz` | `tb_PWM` | Reset values of `prescaler` and `period`: 1001.6 Hz |
-| `sim_reset` | `tb_PWM` | Asynchronous reset while the output is high, registers back to their reset values |
-| `sim_fixed_prescaler_reset_values` | `tb_PWM` | `USER_DEFINE_PRESCALER = false`, `PRESCALER_RATIO = x"02"`: reset values, `prescaler` read 0 |
-| `sim_fixed_prescaler_registers` | `tb_PWM` | Same configuration: `prescaler` not writable |
-| `sim_fixed_prescaler` | `tb_PWM` | Same configuration: timing with the fixed ratio |
-| `sim_static_prescaler` | `tb_PWM` | `STATIC_PRESCALER_RATIO = 20`: tick of `20 x (prescaler + 1)` cycles, first period started on a pulse of the static prescaler |
-| `sim_static_prescaler_update_duty` | `tb_PWM` | Same configuration: duty taken into account at the next period |
-| `sim_static_prescaler_disable_enable` | `tb_PWM` | Same configuration: disable not delayed by the static prescaler, enable on its next pulse |
-| `sim_static_prescaler_reset` | `tb_PWM` | Same configuration: asynchronous reset while running |
-| `sim_static_prescaler_servo_50hz` | `tb_PWM` | Same configuration: servo signal, 1.5 ms pulse every 20 ms (prescaler 249, period 199, duty 15) |
-| `sim_core_prescaler` | `tb_pwm_core` | `pwm_core` 4-bit prescaler, 12-bit counter: maximum prescaler ratio, period 1000 ticks |
-| `sim_core_full_period` | `tb_pwm_core` | Same: maximum period (4096 ticks), duty half |
-| `sim_core_update_duty` | `tb_pwm_core` | Same: maximum duty written at the start of a period, taken into account at the next one |
-| `sim_core_always_high` | `tb_pwm_core` | Same: duty greater than period |
-| `lint_ghdl` | `sbi_PWM_synth_top` | Lint: GHDL `-Wall` analysis and elaboration (empty simulation) of `sbi_PWM` in a wrapper with flat SBI ports (`syn/ghdl/sbi_PWM_synth_top.vhd`) |
-| `lint_ghdl_synth_default` | `sbi_PWM_synth_top` | Synthesis check (see below), default generics of `sbi_PWM` (configuration of the `sim_*` targets of `tb_PWM` without prefix) |
-| `lint_ghdl_synth_fixed_prescaler` | `sbi_PWM_synth_top` | Synthesis check, `USER_DEFINE_PRESCALER = false`, `PRESCALER_RATIO = x"02"` (configuration of the `sim_fixed_prescaler*` targets) |
-| `lint_ghdl_synth_static_prescaler` | `sbi_PWM_synth_top` | Synthesis check, `STATIC_PRESCALER_RATIO = 20` (configuration of the `sim_static_prescaler*` targets) |
+## Theory of Operation
 
-To add a scenario, add a procedure `test_<name>` in the testbench, its branch in the `TEST` selection, and a `sim_*` target with `TEST=<name>` and the generics of its configuration.
+### Hierarchy
 
-A `lint_ghdl_synth_*` target is `lint_ghdl` with the generics of its configuration (FuseSoC `parameters`) and a `pre_run` hook, `syn/ghdl/ghdl_synth.sh`, which adds `include ghdl_synth.mk` to the Makefile generated by edalize. The run step (`make run EXTRA_OPTIONS=<generics>`) then runs, in the build directory:
+| File | Unit | Role |
+|------|------|------|
+| [hdl/sbi_PWM.vhd](hdl/sbi_PWM.vhd) | `sbi_PWM` | Top level: `PWM_registers` + `pwm_core` (8-bit prescaler, 8-bit counter) |
+| [hdl/pwm_core.vhd](hdl/pwm_core.vhd) | `pwm_core` | Static prescaler, shadow registers, prescaler, PWM counter, output register |
+| [hdl/pwm_pkg.vhd](hdl/pwm_pkg.vhd) | `pwm_pkg` | Components |
+| `hdl/csr/PWM_csr.vhd` | `PWM_registers` | Register bank, generated by regtool from [hdl/csr/PWM.hjson](hdl/csr/PWM.hjson) |
 
-1. `ghdl --synth` of the toplevel (rule `ghdl_synth` of [syn/ghdl/ghdl_synth.mk](syn/ghdl/ghdl_synth.mk)), with the options of the target: `STD`, `ANALYZE_OPTIONS` (`-Wall`), `TOPLEVEL_LIBS`, `TOPLEVEL` and the generics. It writes `sbi_PWM_synth_top_synth.vhd` (netlist) and `sbi_PWM_synth_top_synth.log`, prints the warnings, and fails on a synthesis error (an inferred latch is one);
-2. `ghdl -r --no-run`: elaboration with the same generics, without simulation.
+### Ticks, period and duty
 
-To add a configuration, add a target with its `parameters` (the generics are declared in the `parameters` section of `PWM.core`).
+- **Static prescaler**: a `clock_divider` of `asylum:component:clock_divider` in pulse mode gives `cke`, one clock cycle every `STATIC_PRESCALER_RATIO` (S) cycles. It is a clock enable, not a clock: no clock buffer, no generated clock. With S = 1 there is no `clock_divider` and `cke` is always 1.
+- **Prescaler**: a down counter of the `cke` pulses gives a tick every `ratio + 1` pulses: a tick lasts `T = S x (ratio + 1)` clock cycles.
+- **PWM counter**: counts the ticks from 0 to `period`, then restarts at 0: a PWM period is `(period + 1) x T` clock cycles, `f_pwm = f_clk / ((period + 1) x (ratio + 1) x S)`.
+- **Output**: `pwm_r` is `counter < duty`, registered on the `cke` pulses: high during the first `duty` ticks of each period, every edge with the same latency, so the durations are exact.
 
-### How to Run
-
-The default tool is GHDL (`mk/defs.mk`: `TOOL ?= ghdl`, `TARGET ?= sim_prescaler`).
-
-```bash
-make help                 # variables, rules and target list (mk/targets.txt)
-make sim_prescaler        # run one target (log in log/)
-make nonreg_sim           # run every sim_* target
-make lint_ghdl            # GHDL -Wall lint (make nonreg_lint: every lint_* target)
-make lint_ghdl_synth_default   # GHDL -Wall lint + ghdl --synth -Wall check of one configuration
-make clean                # remove build/
-```
-
-Equivalent FuseSoC command:
-
-```bash
-fusesoc --cores-root . run --build-root build --target sim_prescaler asylum:component:PWM:1.0.0
-```
-
-Outside CI, GHDL writes a waveform `dut.fst`. CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs every `sim_*` target, one job per target.
-
-## Synthesis
-
-No vendor synthesis target (the `lint_ghdl_synth_*` targets check the RTL with `ghdl --synth`, see [Targets](#targets)). The HDL sources of the `default` target (`hdl/*.vhd` + generated CSR) contain no simulation-only construct. `pwm_core` uses `2 x PRESCALER_WIDTH + 3 x COUNTER_WIDTH + 1` flip-flops (prescaler counter, shadow ratio, PWM counter, shadow period and duty, output), a zero detector on the prescaler counter, an equality comparator (end of period) and a magnitude comparator (duty), plus the `clock_divider` counter when `STATIC_PRESCALER_RATIO > 1`; in `sbi_PWM` the CSR bank stores 25 bits (17 when `USER_DEFINE_PRESCALER = false`). `pwm_o` comes straight from a flip-flop and can drive a pad directly.
-
-The pulse of `clock_divider` is a clock enable, not a clock: it is instantiated with `BYPASS_CBUFG = true` (no `cbufg` clock buffer, no clock resource, no generated clock), which needs `asylum:component:clock_divider` 2.1.0 or later.
-
-## Design Notes
-
-### Timing
-
-With `T = S x (ratio + 1)` clock cycles per tick (S = `STATIC_PRESCALER_RATIO`, ratio = `prescaler`, or `PRESCALER_RATIO` when `USER_DEFINE_PRESCALER = false`):
-
-- PWM period = `(period + 1) x T` clock cycles, so `f_pwm = f_clk / ((period + 1) x (ratio + 1) x S)`
-- high phase = `duty x T` clock cycles when `duty <= period`, the whole period when `duty > period`
-- duty cycle = `duty / (period + 1)`
-
-```
-  S = 1, ratio = 1 (T = 2 clock cycles), period = 3 (4 ticks), duty = 2
-
-  counter : |  0  |  1  |  2  |  3  |  0  |  1  |  2  |  3  |
-             ___________             ___________
-  pwm_o   : /           \___________/           \___________
-            |<- duty  ->|
-            |<------ period ------->|
-```
+![PWM timing](doc/PWM-timing.svg)
 
 Examples with a 50 MHz clock:
 
@@ -297,66 +203,201 @@ Examples with a 50 MHz clock:
 | Motor | 1 | 9 | 249 | 20 kHz | 1/250 |
 | Maximum resolution, fastest | 1 | 0 | 255 | 195.3 kHz | 1/256 |
 | Slowest without static prescaler | 1 | 255 | 255 | 762.9 Hz | 1/256 |
-| Servo (pulse 1 to 2 ms: duty 10 to 20) | 20 | 249 | 199 | 50 Hz | 100 us |
+| Servo (pulse 1 to 2 ms: duty 10 to 20) | 20 | 249 | 199 | 50 Hz | 100 µs |
 
-100 % needs `duty > period`, so `period <= 254`. Without static prescaler the lowest PWM frequency is `f_clk / 65536` (762.9 Hz at 50 MHz): a lower frequency needs `STATIC_PRESCALER_RATIO > 1` (all the frequencies are then divided by S, the duty resolution is unchanged).
+100 % needs `duty > period`, so `period <= 254`.
 
-### Enable
+### Shadow registers
 
-- `cfg.enable = 0`: the counter is cleared, `pwm_o` is low (one clock cycle after the write), and the shadow registers follow the CSR.
-- `cfg.enable = 1`: the first PWM period starts with its high phase on the first pulse of the static prescaler after the write (one clock cycle after the write when `STATIC_PRESCALER_RATIO = 1`, at most S clock cycles after), using the values written before the enable. Its first tick lasts `T` cycles like the others. The static prescaler runs freely: the edges of `pwm_o` are aligned on its pulses.
-
-Typical sequence: write `prescaler`, `period`, `duty`, then `cfg = 0x01`.
-
-### Configuration Update
-
-`prescaler`, `period` and `duty` are copied into the shadow registers of `pwm_core` on the last tick of each PWM period (and continuously while the PWM is disabled). A write is therefore taken into account at the start of the next PWM period:
+`ratio`, `period` and `duty` are copied into shadow registers on the last tick of each PWM period, and every cycle while the PWM is disabled. A write is taken into account at the start of the next period:
 
 - the current pulse is never truncated nor doubled (duty changed during the high or the low phase);
 - the current period is never extended nor shortened, and the counter never goes beyond the period in use (period decreased below the current count);
-- all the ticks of a PWM period have the same duration (prescaler changed during a period).
+- every tick of a period has the same duration (prescaler changed during a period).
 
-Each register is copied independently: if a PWM period ends between two writes (for example `period` then `duty`), one period uses the new `period` with the old `duty`. To change several values at once without such an intermediate period, write them with `cfg.enable = 0` (the PWM restarts from the beginning of a period).
+Each register is copied on its own: if a period ends between two writes (`period` then `duty`), one period uses the new `period` with the old `duty`. To change several values at once, write them with `cfg.enable = 0`.
 
-## Directory Structure
+### Enable
 
+- `cfg.enable = 0`: the counter is cleared, `pwm_o` is low one clock cycle after the write, the shadow registers follow the registers.
+- `cfg.enable = 1`: the first period starts with its high phase on the first `cke` pulse after the write (one clock cycle after it when S = 1, at most S cycles after), with the values written before. Its first tick lasts `T` cycles like the others. The static prescaler runs freely: the edges of `pwm_o` are aligned on its pulses.
+
+## Registers
+
+Four 8-bit registers (2 address bits): `cfg` (0x0, bit `enable`), `prescaler` (0x1, only when `USER_DEFINE_PRESCALER = true`), `period` (0x2), `duty` (0x3). Reset values: `cfg = 0x00`, `prescaler = PRESCALER_RATIO`, `period = 0xFF`, `duty = 0x00`. They read back as written; the PWM uses their shadow copies.
+
+- Register documentation: **[hdl/csr/PWM_csr.md](hdl/csr/PWM_csr.md)**
+- C header: [hdl/csr/PWM_csr.h](hdl/csr/PWM_csr.h)
+- Source: [hdl/csr/PWM.hjson](hdl/csr/PWM.hjson) (regtool)
+
+## Programmer's Guide
+
+### Initialization
+
+1. Write `cfg` = 0 (disable: the shadow registers follow the registers).
+2. Write `prescaler` (if present), `period` and `duty`.
+3. Set `cfg.enable`: the first period starts with its high phase.
+
+### While running
+
+Write `duty` (or `period`, `prescaler`) at any time: the value is used from the next PWM period, there is nothing to poll. `cfg` can be read-modify-written: writing `enable = 1` again does not restart the period.
+
+### Example
+
+The registers are 8 bits wide, at consecutive byte addresses from the base address of the IP (`0x40003000` is an example, use the address map of your SoC).
+
+```c
+#include <stdint.h>
+#include "PWM_csr.h"
+
+#define PWM_BASE ((uintptr_t)0x40003000u)   // example base address
+
+static inline void reg_wr(uintptr_t base, uint32_t offset, uint8_t data)
+{
+  *(volatile uint8_t *)(base + offset) = data;
+}
+
+static inline uint8_t reg_rd(uintptr_t base, uint32_t offset)
+{
+  return *(volatile uint8_t *)(base + offset);
+}
+
+// Start the PWM : configuration written while disabled, then enable
+void pwm_start(uint8_t prescaler, uint8_t period, uint8_t duty)
+{
+  reg_wr(PWM_BASE, PWM_CFG      , 0x00);                    // disable : counter cleared, pwm_o low
+  reg_wr(PWM_BASE, PWM_PRESCALER, prescaler);               // tick = (prescaler+1) x STATIC_PRESCALER_RATIO cycles
+  reg_wr(PWM_BASE, PWM_PERIOD   , period);                  // PWM period = period+1 ticks
+  reg_wr(PWM_BASE, PWM_DUTY     , duty);                    // high during duty ticks
+  reg_wr(PWM_BASE, PWM_CFG      , reg_rd(PWM_BASE, PWM_CFG) | (1u << PWM_CFG_ENABLE));
+}
+
+// Change the duty while running : taken at the start of the next PWM period
+void pwm_set_duty(uint8_t duty)
+{
+  reg_wr(PWM_BASE, PWM_DUTY, duty);
+}
+
+void pwm_stop(void)
+{
+  reg_wr(PWM_BASE, PWM_CFG, reg_rd(PWM_BASE, PWM_CFG) & (uint8_t)~(PWM_CFG_ENABLE_MASK << PWM_CFG_ENABLE));
+}
+
+// Servo with STATIC_PRESCALER_RATIO = 20 and a 50 MHz clock : 50 Hz, a tick
+// of 100 us, pulse of 1 ms (duty 10) to 2 ms (duty 20)
+void servo_init(void)
+{
+  pwm_start(249, 199, 15);                                  // center : 1.5 ms
+}
 ```
-asylum-component-pwm/
-├── PWM.core                # FuseSoC core (asylum:component:PWM)
-├── Makefile                # Common Asylum Makefile (FuseSoC wrapper)
-├── mk/
-│   ├── defs.mk             # FILE_CORE, default TARGET and TOOL
-│   └── targets.txt         # Target list (generated from the .core)
-├── .github/workflows/
-│   └── ci.yml              # CI jobs (generated by make ci_generate)
-├── doc/
-│   ├── PWM.drawio          # Block diagram
-│   └── Makefile            # PNG export (drawio CLI)
-├── hdl/
-│   ├── pwm_pkg.vhd
-│   ├── pwm_core.vhd
-│   ├── sbi_PWM.vhd
-│   └── csr/
-│       ├── PWM.hjson       # Register description (source)
-│       ├── PWM_csr.vhd     # Generated
-│       ├── PWM_csr_pkg.vhd # Generated
-│       ├── PWM_csr.md      # Generated
-│       └── PWM_csr.h       # Generated
-├── sim/
-│   ├── common/             # tb_pwm_pkg.vhd (checks shared by the testbenches)
-│   ├── basic/              # tb_PWM.vhd (sbi_PWM, UVVM SBI BFM)
-│   └── core/               # tb_pwm_core.vhd (pwm_core alone)
-└── syn/ghdl/
-    ├── sbi_PWM_synth_top.vhd  # Lint / synthesis check top (sbi_PWM, flat SBI ports)
-    ├── ghdl_synth.sh       # pre_run hook of lint_ghdl_synth_*: includes ghdl_synth.mk in the edalize Makefile
-    └── ghdl_synth.mk       # ghdl_synth rule (ghdl --synth with the options of the target), prerequisite of run
+
+## Design Verification
+
+### Testbenches
+
+| File | DUT | Description |
+|------|-----|-------------|
+| [sim/pwm/tb_PWM.vhd](sim/pwm/tb_PWM.vhd) | `sbi_PWM` | Self-checking UVVM testbench with the SBI BFM, generics `TESTS_LIST` (scenarios, see below) and the generics of the DUT: the expected durations are computed from them. The high phase and the period of `pwm_o` are measured in clock cycles and checked exactly, and every edge is checked not to come early. Scenarios in `tb_PWM_<name>_pkg`, names and dispatch in [tb_PWM_tests_pkg](sim/pwm/tb_PWM_tests_pkg.vhd) |
+| [sim/pwm_core/tb_pwm_core.vhd](sim/pwm_core/tb_pwm_core.vhd) | `pwm_core` | Self-checking UVVM testbench of `pwm_core` alone, configuration driven directly, generics `TESTS_LIST`, `PRESCALER_WIDTH`, `COUNTER_WIDTH`: the values of the scenarios come from the widths (maximum ratio, maximum period). Scenarios in `tb_pwm_core_<name>_pkg`, names and dispatch in [tb_pwm_core_tests_pkg](sim/pwm_core/tb_pwm_core_tests_pkg.vhd) |
+
+The helpers of both testbenches (register accesses, configuration, measurement of `pwm_o`, reset pulse) are in [sim/common/tb_PWM_bfm_pkg.vhd](sim/common/tb_PWM_bfm_pkg.vhd).
+
+### Scenarios (`TESTS_LIST`)
+
+The scenarios are chosen at run time with the generic `TESTS_LIST`: names separated by `,` without space (`duty,update_duty,duty`), a name may be repeated. The sequencer first checks every name (an unknown name is a `TB_ERROR` before any scenario runs), then for each scenario drives a reset pulse with the bus inactive, logs `TEST <i>/<N> : <name>` and runs it: each scenario starts from reset and configures the DUT itself. The empty list (default) only compiles and elaborates the testbench. The list is parsed and its names checked with `list_length` / `list_item` / `list_contains` of `asylum.string_pkg` (`asylum:utils:pkg` >= 1.10.0).
+
+`tb_PWM` (checks counted as the `=> OK` lines of the log, reference configuration: default generics):
+
+| Name | Checks | Description |
+|------|--------|-------------|
+| `reset_values` | 5 | Reset values of the registers (`prescaler`: `PRESCALER_RATIO`, 0 if not implemented), `pwm_o` low |
+| `registers` | 14 | Read and write of `prescaler`, `period`, `duty` with a different pattern each, then the inverted one; only `cfg.enable` is implemented |
+| `disabled` | 2 | Configured but not enabled: `pwm_o` stays low |
+| `no_prescaler` | 26 | Prescaler 0, period 10 ticks, duty 3: start one cycle after the enable, 4 periods |
+| `prescaler` | 20 | Prescaler 4, period 8 ticks, duty 5: start latency, 3 periods |
+| `duty` | 38 | Duty 0 (always low), 1, `period` (low during one tick), `period + 1` and 255 (always high) |
+| `period_0` | 6 | Period of one tick: duty 0 always low, duty 1 always high |
+| `update_duty` | 31 | Duty decreased during the high phase (no truncated pulse), increased during the low phase (no second pulse), used from the next period; `cfg` written again without restarting the period |
+| `update_period` | 32 | Period increased during the low phase (current period not extended), period and duty decreased below the counter (no overflow) |
+| `update_prescaler` | 23 | Prescaler decreased during a period: the current period keeps its ticks (needs `USER_DEFINE_PRESCALER = true`, a `TB_ERROR` otherwise) |
+| `disable_enable` | 44 | Disable during the high phase (`pwm_o` low one cycle later, not delayed by the static prescaler), during the low phase (counter cleared): each enable starts a complete period |
+| `frequency` | 14 | Reset values of `prescaler` and `period`, duty 50 %: 1001.6 Hz with the default generics |
+| `servo` | 14 | Prescaler 249, period 199, duty 15: 1.5 ms pulse every 20 ms with `STATIC_PRESCALER_RATIO = 20` |
+| `async_reset` | 10 | Reset asserted while `pwm_o` is high: `pwm_o` low without clock edge, registers back to their reset values, `pwm_o` stays low |
+
+`tb_pwm_core` (4-bit prescaler, 12-bit counter):
+
+| Name | Checks | Description |
+|------|--------|-------------|
+| `prescaler` | 16 | Maximum ratio (16 cycles per tick), period 1000 ticks, duty a quarter; low while disabled |
+| `full_period` | 14 | Maximum period (4096 ticks), duty half |
+| `update_duty` | 20 | Maximum duty written at the start of a period: current period unchanged, low during one tick from the next one |
+| `always_high` | 4 | Duty greater than period: always high |
+
+### Targets
+
+| Target | Toplevel | Description |
+|--------|----------|-------------|
+| `default` | `sbi_PWM` | HDL fileset + generation of the register bank (not a simulation) |
+| `sim_pwm` | `tb_PWM` | Reference configuration of `tb_PWM` (default generics): build and elaboration only (`TESTS_LIST` empty), base of the scenario targets and of the list runs |
+| `sim_pwm_<name>` | `tb_PWM` | One target per scenario: `sim_pwm_reset_values`, `_registers`, `_disabled`, `_no_prescaler`, `_prescaler`, `_duty`, `_period_0`, `_update_duty`, `_update_period`, `_update_prescaler`, `_disable_enable`, `_frequency`, `_servo`, `_async_reset` (279 checks in all) |
+| `sim_pwm_fixed_prescaler` | `tb_PWM` | `USER_DEFINE_PRESCALER = false`, `PRESCALER_RATIO = x"02"`: every scenario but `update_prescaler` (256 checks) |
+| `sim_pwm_static_prescaler` | `tb_PWM` | `STATIC_PRESCALER_RATIO = 20`: every scenario (279 checks) |
+| `sim_pwm_core` | `tb_pwm_core` | `pwm_core` with a 4-bit prescaler and a 12-bit counter: build and elaboration only |
+| `sim_pwm_core_<name>` | `tb_pwm_core` | One target per scenario: `sim_pwm_core_prescaler`, `_full_period`, `_update_duty`, `_always_high` (54 checks in all) |
+| `lint_ghdl` | `asylum.sbi_PWM_wrapper` | GHDL `-Wall` analysis and elaboration of [syn/sbi_PWM_wrapper.vhd](syn/sbi_PWM_wrapper.vhd) (`sbi_PWM` with flat SBI ports) |
+| `lint_ghdl_synth_<config>` | `asylum.sbi_PWM_wrapper` | `ghdl --synth` check (no latch, synthesizable): `default`, `fixed_prescaler`, `static_prescaler` (the configurations of the `sim_pwm*` targets) |
+| `syn_<config>` | `asylum.sbi_PWM_wrapper` | Synthesis with Yosys, Artix-7 and sky130 (see [Resources](#resources)), same configurations as `lint_ghdl_synth_*`: `syn_default`, `syn_fixed_prescaler`, `syn_static_prescaler` |
+
+The reference configuration of a testbench has a build-only base target and one target per scenario: one CI job per scenario, a failure is isolated. Every other configuration has one target that runs its whole list: the `TEST <i>/<N>` header names a failing scenario. FuseSoC replaces the `parameters` list of an inherited target, so each target repeats the generics of its configuration.
+
+Every `sim_*`, `lint_*` and `syn_*` target is a job of the [GitHub CI](https://github.com/deuskane/asylum-component-pwm/actions/workflows/ci.yml), run in the [asylum-env](https://github.com/deuskane/asylum-ci) image (GHDL, FuseSoC, UVVM, Yosys). The `sim`, `lint` and `syn` badges count the passed and failed targets of the last run on `main`.
+
+### How to Run
+
+From a clone of [asylum-project](https://github.com/deuskane/asylum-project) (GHDL and FuseSoC installed, or in the asylum-env image):
+
+```bash
+make help                        # variables, rules and targets
+make sim_pwm_update_duty         # one scenario, log in log/
+make sim_pwm_static_prescaler    # every scenario of a configuration
+make nonreg_sim                  # every sim_* target
+make nonreg_lint                 # every lint_* target
+make nonreg_syn                  # every syn_* target (Yosys, figures of Resources)
+make TARGETS_FILTER=^sim_pwm_core nonreg_sim
 ```
 
-## Dependencies
+To run a list of scenarios, build the testbench once, then run the list without recompiling, either with FuseSoC (same `--build-root` and `--no-export` as the Makefile, so that the build of the target is reused; any generic of the target can be overridden after the VLNV):
 
-| Core | Used by (fileset) | Purpose |
-|------|-------------------|---------|
-| `asylum:component:clock_divider` (>= 2.1.0) | `hdl` | Static prescaler (`clock_divider`, pulse mode, `BYPASS_CBUFG = true`) of `pwm_core` |
-| `asylum:utils:generators` | `hdl` | regtool generator and CSR building block (`csr_reg`) |
-| `asylum:utils:pkg` | `hdl` | Common packages (`sbi_pkg`, ...) |
-| `bitvis:verification:uvvm` | `sim_common`, `sim_basic`, `sim_core` | UVVM utility library and SBI VIP (testbenches only) |
+```bash
+make sim_pwm                     # build and elaboration (TESTS_LIST empty)
+fusesoc --cores-root . run --build-root build --no-export --run --target sim_pwm asylum:component:PWM:1.0.0 --TESTS_LIST=duty,update_duty,duty
+```
+
+or in the build directory of the target. `EXTRA_OPTIONS` replaces every generic set by the target: repeat the generics of the configuration, else their default values apply:
+
+```bash
+cd build/asylum_component_PWM_1.0.0/sim_pwm-ghdl
+make run EXTRA_OPTIONS="-gTESTS_LIST=duty,servo -gSTATIC_PRESCALER_RATIO=20"
+```
+
+To add a scenario: a `tb_PWM_<name>_pkg` package with a `run` procedure in the `sim_pwm` fileset, its name in `C_TESTS` and its case in `run_test` of [tb_PWM_tests_pkg](sim/pwm/tb_PWM_tests_pkg.vhd), a `sim_pwm_<name>` target and the name in the `TESTS_LIST` of the other configurations in [PWM.core](PWM.core), then `make mk/targets.txt` and `make ci_generate`.
+
+Outside the CI, GHDL writes a waveform `dut.fst`.
+
+## Dependencies and Related IPs
+
+| Core | Repository | Purpose |
+|------|------------|---------|
+| `asylum:component:clock_divider` (>= 2.1.0) | [asylum-component-clock_divider](https://github.com/deuskane/asylum-component-clock_divider) | Static prescaler of `pwm_core` (pulse mode, `BYPASS_CBUFG = true`) |
+| `asylum:utils:generators` | [asylum-utils-generators](https://github.com/deuskane/asylum-utils-generators) | regtool (register generator) and the CSR building blocks |
+| `asylum:utils:pkg` | [asylum-utils-pkg](https://github.com/deuskane/asylum-utils-pkg) | Common packages (`sbi_pkg`, ...); the testbenches need >= 1.10.0 (`string_pkg` lists of `TESTS_LIST`) |
+| `asylum:utils:ghdl_synth` | [asylum-utils-generators](https://github.com/deuskane/asylum-utils-generators) | `ghdl --synth` check of the `lint_ghdl_synth_*` targets |
+| `asylum:utils:yosys_synth` | [asylum-utils-generators](https://github.com/deuskane/asylum-utils-generators) | Yosys synthesis of the `syn_*` targets (Artix-7 and sky130) |
+| `bitvis:verification:uvvm` | [UVVM](https://github.com/UVVM/UVVM) | Verification library and SBI BFM |
+
+All the IPs: [asylum-project](https://github.com/deuskane/asylum-project).
+
+## License
+
+Apache License 2.0, see [LICENSE](LICENSE).

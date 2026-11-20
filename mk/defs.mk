@@ -1,3 +1,3 @@
 FILE_CORE	?= PWM.core
-TARGET          ?= sim_prescaler
+TARGET          ?= sim_pwm_prescaler
 TOOL		?= ghdl

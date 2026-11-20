@@ -1,0 +1,60 @@
+{
+ "signal": [
+  {
+   "name": "clk_i",
+   "wave": "p................."
+  },
+  {
+   "name": "cfg.enable",
+   "wave": "0.1..............."
+  },
+  {
+   "name": "duty (register)",
+   "wave": "3....3............",
+   "data": [
+    "2",
+    "1"
+   ]
+  },
+  {
+   "name": "tick",
+   "wave": "0..101010101010101"
+  },
+  {
+   "name": "pwm_cnt_r",
+   "wave": "4...4.4.4.4.4.4.4.",
+   "data": [
+    "0",
+    "1",
+    "2",
+    "3",
+    "0",
+    "1",
+    "2",
+    "3"
+   ]
+  },
+  {
+   "name": "duty_r (shadow)",
+   "wave": "5.........5.......",
+   "data": [
+    "2",
+    "1"
+   ]
+  },
+  {
+   "name": "pwm_o",
+   "wave": "0..1...0...1.0...."
+  }
+ ],
+ "head": {
+  "text": "prescaler 1 (tick every 2 cycles), period 3 (4 ticks), duty 2 then 1"
+ },
+ "foot": {
+  "text": "duty written during a period : taken at the end of the period (tick and pwm_cnt_r = period)"
+ },
+ "config": {
+  "hscale": 1,
+  "skin": "default"
+ }
+}

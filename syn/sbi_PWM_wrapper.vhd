@@ -1,13 +1,13 @@
 -------------------------------------------------------------------------------
--- Title      : sbi_PWM_synth_top
+-- Title      : sbi_PWM_wrapper
 -- Project    : Asylum
 -------------------------------------------------------------------------------
--- File       : sbi_PWM_synth_top.vhd
+-- File       : sbi_PWM_wrapper.vhd
 -- Author     : Mathieu Rosiere
 -------------------------------------------------------------------------------
 -- Description:
--- Synthesis check top (lint_ghdl, lint_ghdl_synth) : sbi_PWM (and so
--- pwm_core) with flat and constrained SBI ports (sbi_PWM has unconstrained
+-- Top of the lint_ghdl, lint_ghdl_synth_* and syn_* targets : sbi_PWM (and
+-- so pwm_core) with flat and constrained SBI ports (sbi_PWM has unconstrained
 -- SBI ports and cannot be a synthesis top). SBI address / data width :
 -- SBI_ADDR_WIDTH / SBI_DATA_WIDTH. The synthesizable generics are forwarded
 -- with the defaults of sbi_PWM.
@@ -18,6 +18,9 @@
 -- Revisions  :
 -- Date        Version  Author   Description
 -- 2026-10-22  1.0      mrosiere Created
+-- 2026-11-20  1.1      mrosiere Renamed sbi_PWM_wrapper (was
+--                               syn/ghdl/sbi_PWM_synth_top), also the top of
+--                               the syn_* targets
 -------------------------------------------------------------------------------
 
 library ieee;
@@ -25,7 +28,7 @@ use     ieee.std_logic_1164.all;
 library asylum;
 use     asylum.sbi_pkg.all;
 
-entity sbi_PWM_synth_top is
+entity sbi_PWM_wrapper is
   generic (
     STATIC_PRESCALER_RATIO: positive                       := 1;
     USER_DEFINE_PRESCALER : boolean                        := true;
@@ -47,9 +50,9 @@ entity sbi_PWM_synth_top is
     -- PWM Output
     pwm_o         : out std_logic
   );
-end entity sbi_PWM_synth_top;
+end entity sbi_PWM_wrapper;
 
-architecture rtl of sbi_PWM_synth_top is
+architecture rtl of sbi_PWM_wrapper is
 
   signal sbi_ini       : sbi_ini_t(addr (SBI_ADDR_WIDTH-1 downto 0),
                                    wdata(SBI_DATA_WIDTH-1 downto 0));
