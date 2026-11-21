@@ -165,11 +165,11 @@ Figures of the `syn_*` targets (`make nonreg_syn`, see [Targets](#targets)): [sy
 
 | Configuration | LUT¹ | LUTRAM¹ | FF¹ | CARRY4¹ | MUXF7/F8¹ | BRAM¹ | DSP¹ | Area² (µm²) | kGE³ |
 |---|---|---|---|---|---|---|---|---|---|
-| `syn_default` (default generics) | 132 | 0 | 66 | 5 | 17 | 0 | 0 | 2977.86 | 0.793 |
-| `syn_fixed_prescaler` (no prescaler register, ratio fixed to 2) | 101 | 0 | 51 | 5 | 9 | 0 | 0 | 2212.12 | 0.589 |
-| `syn_static_prescaler` (`STATIC_PRESCALER_RATIO = 20`) | 175 | 0 | 72 | 7 | 38 | 0 | 0 | 3159.28 | 0.842 |
+| `syn_default` (default generics) | 65 | 0 | 66 | 5 | 17 | 0 | 0 | 2977.86 | 0.793 |
+| `syn_fixed_prescaler` (no prescaler register, ratio fixed to 2) | 49 | 0 | 51 | 5 | 9 | 0 | 0 | 2212.12 | 0.589 |
+| `syn_static_prescaler` (`STATIC_PRESCALER_RATIO = 20`) | 86 | 0 | 72 | 7 | 38 | 0 | 0 | 3159.28 | 0.842 |
 
-¹ Xilinx Artix-7 (LUT6), Yosys 0.33 `synth_xilinx -flatten -noiopad -noclkbuf`, before place and route: every cell of the netlist is counted, Vivado may differ. An `INV` counts as a `LUT1`: `synth_xilinx` puts one on the reset pin of each flip-flop with the active-low reset (74 of the 132 LUTs of `syn_default`). The IP has no memory: no LUTRAM, no BRAM. Flip-flops of `syn_default`: 25 register bits (`cfg`, `prescaler`, `period`, `duty`), 24 shadow bits, the prescaler and PWM counters (8 + 8) and the output; the static prescaler (`clock_divider`) adds 6.
+¹ Xilinx Artix-7 (LUT6), Yosys 0.33 `synth_xilinx -flatten -noiopad -noclkbuf`, before place and route: every cell of the netlist is counted, Vivado may differ. Identical cells are merged as a vendor tool does (`opt_merge -share_all`): the inverters of an active-low reset net become one; every remaining cell is counted, an `INV` as a `LUT1` (9 of the 65 LUTs of `syn_default`). The IP has no memory: no LUTRAM, no BRAM. Flip-flops of `syn_default`: 25 register bits (`cfg`, `prescaler`, `period`, `duty`), 24 shadow bits, the prescaler and PWM counters (8 + 8) and the output; the static prescaler (`clock_divider`) adds 6.
 
 ² SkyWater sky130 `sky130_fd_sc_hd`, typical corner (tt, 25 °C, 1.80 V), Yosys 0.33 `synth` + `dfflibmap` + `abc -liberty`: standard-cell area only, no timing constraint, no buffering, clock tree or placement.
 
